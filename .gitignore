@@ -1,0 +1,10 @@
+node_modules/
+dist/
+experiments/out/
+.cache/
+out/
+*.log
+.env
+.env.*
+# Mikkel's private global instructions: kept locally, not published
+ai-instructions/GLOBAL_CLAUDE.md
