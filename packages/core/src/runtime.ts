@@ -17,6 +17,8 @@ export interface FrameElementInfo {
   opacity: number;
   /** Fraction of the element visible inside its mask/clip parent (1 = fully shown). */
   shown: number;
+  /** Part of a value-change transition (odometer roll, slide), not a resting state. */
+  transient?: boolean;
   text?: string;
   /** Rendered font size in stage px (includes transforms). */
   fontSize?: number;
@@ -287,7 +289,7 @@ html,body{margin:0;overflow:hidden;background:#000}
         key = pathKey(el.parentElement.parentElement ?? el);
       }
       out.push({
-        name: describe(el), group, key, shown: +shown.toFixed(3), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
+        name: describe(el), group, key, shown: +shown.toFixed(3), ...(el.closest(".dolly-rl") ? { transient: true } : {}), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
         rect: { x: (r.left - st.left) / scale, y: (r.top - st.top) / scale, w: r.width / scale, h: r.height / scale },
         opacity: +op.toFixed(3),
         ...(own ? { text: own, fontSize: +(parseFloat(cs.fontSize) * ratio / scale).toFixed(2), color: cs.color, background: bgc ?? bg } : {}),

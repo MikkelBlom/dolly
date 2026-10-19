@@ -25,6 +25,8 @@ export interface LintOptions {
   rules?: Partial<Record<RuleId, false | number>>;
   /** Output height the video is judged at (text size). */
   outputHeight?: number;
+  /** Judge text size for phones (default: on for 9:16, 4:5 and 1:1). */
+  mobile?: boolean;
 }
 
 export const RULES = {
@@ -47,7 +49,7 @@ interface Sample {
   t: number;
   motion: number;
   cameraMotion: number;
-  elements: Array<{ key: string; group: string; scene: string | null; text?: string; opacity: number; shown: number; rect: { x: number; y: number; w: number; h: number }; fontSize?: number; color?: string; background?: string }>;
+  elements: Array<{ key: string; group: string; scene: string | null; text?: string; opacity: number; shown: number; transient?: boolean; rect: { x: number; y: number; w: number; h: number }; fontSize?: number; color?: string; background?: string }>;
 }
 
 export interface LintResult { ok: boolean; errors: number; warnings: number; infos: number; samples: number; findings: Finding[] }
@@ -59,6 +61,8 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
   const outH = o.outputHeight ?? 1080;
   const k = outH / H; // stage px → output px
   const on = (r: RuleId) => o.rules?.[r] !== false;
+  // phone-first formats get the stricter mobile text size check
+  const mobile = o.mobile ?? ["9:16", "4:5", "1:1"].includes(s.meta.aspect);
   const thr = (r: RuleId, d: number) => (typeof o.rules?.[r] === "number" ? (o.rules![r] as number) : d);
   const times = Array.from({ length: Math.floor(dur / step) }, (_, i) => +(i * step).toFixed(4));
   const samples: Sample[] = new Array(times.length);
@@ -71,21 +75,24 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
   const add = (f: Finding) => findings.push({ ...f, t0: +f.t0.toFixed(2), t1: +f.t1.toFixed(2) });
 
   // --- text blocks over time ---
-  interface Block { key: string; group: string; scene: string | null; text: string; spans: Array<[number, number]>; minFont: number; rects: Sample["elements"][number]["rect"][]; contrastMin: number; color?: string; bg?: string; firstT: number }
+  interface Block { key: string; elKey: string; group: string; scene: string | null; text: string; spans: Array<[number, number]>; minFont: number; fonts: number[]; rects: Sample["elements"][number]["rect"][]; contrastMin: number; color?: string; bg?: string; firstT: number }
   const blocks = new Map<string, Block>();
   for (const smp of samples) {
     const byKey = new Map<string, Sample["elements"]>();
-    for (const e of smp.elements) if (e.text) byKey.set(e.key, [...(byKey.get(e.key) ?? []), e]);
-    for (const [key, units] of byKey) {
+    for (const e of smp.elements) if (e.text && !e.transient) byKey.set(e.key, [...(byKey.get(e.key) ?? []), e]);
+    for (const [elKey, units] of byKey) {
       const text = units.map(u => u.text).join(units.length > 1 && units.every(u => u.text!.length > 1) ? " " : "");
+      // a block is one text state of one element: a label that changes value is a new block
+      const key = `${elKey}|${text}`;
       const readableUnits = units.filter(u => u.opacity >= 0.6 && u.shown >= 0.6 && onScreen(u.rect, W, H) >= 0.5);
       const readable = readableUnits.length >= Math.ceil(units.length * 0.8);
       let b = blocks.get(key);
-      if (!b) { b = { key, group: units[0].group, scene: units[0].scene, text, spans: [], minFont: Infinity, rects: [], contrastMin: Infinity, firstT: smp.t }; blocks.set(key, b); }
-      if (text.length > b.text.length) b.text = text;
+      if (!b) { b = { key, elKey, group: units[0].group, scene: units[0].scene, text, spans: [], minFont: Infinity, fonts: [], rects: [], contrastMin: Infinity, firstT: smp.t }; blocks.set(key, b); }
       if (!readable) continue;
       const last = b.spans[b.spans.length - 1];
       if (last && smp.t - last[1] <= step * 1.5) last[1] = smp.t; else b.spans.push([smp.t, smp.t]);
+      const fs_ = readableUnits.map(u => u.fontSize ?? 0).filter(Boolean);
+      if (fs_.length) b.fonts.push(Math.min(...fs_));
       for (const u of readableUnits) {
         if (u.fontSize) b.minFont = Math.min(b.minFont, u.fontSize);
         if (u.color && u.background && u.opacity >= 0.95) {
@@ -98,31 +105,39 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
     }
   }
 
+  // live values (counters, typed input, badges that update per keystroke) change text often; their
+  // intermediate states aren't meant to be read
+  const states = new Map<string, number>();
+  for (const b of blocks.values()) if (b.spans.length) states.set(b.elKey, (states.get(b.elKey) ?? 0) + 1);
   for (const b of blocks.values()) {
     if (!b.spans.length) continue;
+    // size where the text rests (middle of its readable time), not mid-entrance
+    const restFont = b.fonts.length ? b.fonts[Math.floor(b.fonts.length / 2)] : b.minFont;
+    const live = (states.get(b.elKey) ?? 0) >= 3;
     const words = b.text.trim().split(/\s+/).filter(Boolean).length;
     const longest = b.spans.reduce((m, sp) => Math.max(m, sp[1] - sp[0] + step), 0);
     const endsAtEnd = b.spans.some(sp => sp[1] >= dur - step * 2);
     const need = Math.max(thr("text-reading-time", 0.8), readingTime(b.text));
-    if (on("text-reading-time") && longest < need && !endsAtEnd && b.text.length > 1) {
+    if (on("text-reading-time") && !live && longest < need * 0.9 && !endsAtEnd && b.text.length > 1) {
       const sp = b.spans.reduce((m, x) => (x[1] - x[0] > m[1] - m[0] ? x : m));
-      add({ rule: "text-reading-time", severity: longest < need * 0.7 ? "error" : "warn", t0: sp[0], t1: sp[1] + step, scene: b.scene, element: b.group,
-        message: `"${clip(b.text)}" (${words} words) is readable for ${longest.toFixed(2)} s; it needs ~${need.toFixed(1)} s`, fix: `hold it ${(need - longest).toFixed(1)} s longer or cut words` });
+      add({ rule: "text-reading-time", severity: longest < need * 0.6 ? "error" : "warn", t0: sp[0], t1: sp[1] + step, scene: b.scene, element: b.group,
+        message: `"${clip(b.text)}" (${words} word${words === 1 ? "" : "s"}) is readable for ${longest.toFixed(2)} s; it needs ~${need.toFixed(1)} s`, fix: `hold it ${(need - longest).toFixed(1)} s longer or cut words` });
     }
-    if (on("min-text-size") && Number.isFinite(b.minFont)) {
-      const px = b.minFont * k;
+    if (on("min-text-size") && Number.isFinite(restFont)) {
+      const px = restFont * k;
       if (px < thr("min-text-size", 22)) add({ rule: "min-text-size", severity: "warn", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group, message: `"${clip(b.text)}" is ${px.toFixed(1)} px tall at ${outH}p (min 22)`, fix: "scale it up or drop it" });
-      else if (px < outH * 0.03) add({ rule: "min-text-size", severity: "info", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group, message: `"${clip(b.text)}" is ${px.toFixed(1)} px at ${outH}p, under 3 % of height: small on a phone`, fix: "fine for labels; enlarge if it carries the message" });
+      else if (mobile && px < outH * 0.03) add({ rule: "min-text-size", severity: "info", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group, message: `"${clip(b.text)}" is ${px.toFixed(1)} px at ${outH}p, under 3 % of height: small on a phone`, fix: "fine for labels; enlarge if it carries the message" });
     }
     if (on("contrast-wcag") && Number.isFinite(b.contrastMin)) {
-      const large = b.minFont * k >= outH * 0.045;
+      const large = restFont * k >= outH * 0.045;
       const need = large ? 3 : thr("contrast-wcag", 4.5);
-      if (b.contrastMin < need) add({ rule: "contrast-wcag", severity: b.contrastMin < need * 0.75 ? "error" : "warn", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group,
+      if (b.contrastMin < need) add({ rule: "contrast-wcag", severity: b.contrastMin < 3 ? "error" : "warn", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group,
         message: `"${clip(b.text)}" contrast ${b.contrastMin.toFixed(2)}:1 (${b.color} on ${b.bg}); needs ${need}:1`, fix: "darken the text or lighten its background" });
     }
     if (on("safe-area-title")) {
       const m = 0.05;
-      const out = b.rects.find(r => r.x < W * m || r.y < H * m || r.x + r.w > W * (1 - m) || r.y + r.h > H * (1 - m));
+      const mid = b.rects[Math.floor(b.rects.length / 2)];
+      const out = mid && (mid.x < W * m || mid.y < H * m || mid.x + mid.w > W * (1 - m) || mid.y + mid.h > H * (1 - m)) ? mid : null;
       if (out) add({ rule: "safe-area-title", severity: "warn", t0: b.spans[0][0], t1: b.spans[0][1], scene: b.scene, element: b.group,
         message: `"${clip(b.text)}" leaves the 90 % title-safe area (box ${Math.round(out.x)},${Math.round(out.y)} ${Math.round(out.w)}×${Math.round(out.h)} on ${W}×${H})`, fix: "move it inward" });
     }
@@ -133,7 +148,7 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
     const limit = thr("static-span", 1.5);
     let start: number | null = null;
     for (const smp of [...samples, { t: dur, motion: Infinity } as Sample]) {
-      if (smp.motion < 0.5) start ??= smp.t;
+      if (smp.motion < 3 * step) start ??= smp.t;
       else if (start !== null) {
         if (smp.t - start > limit) add({ rule: "static-span", severity: "warn", t0: start, t1: smp.t, scene: s.sceneAt(start), element: null, message: `nothing moves for ${(smp.t - start).toFixed(1)} s`, fix: "add a slow push-in, drift or bob during the hold" });
         start = null;
@@ -151,19 +166,22 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
       for (const k2 of vis) if (!seen.has(k2)) { seen.add(k2); entered.set(i, (entered.get(i) ?? new Set()).add(k2)); }
     });
     const max = thr("simultaneous-entrances", 2);
-    for (const [i, keys] of entered) if (keys.size > max && !isCut(s, samples[i].t, step)) {
+    for (const [i, all] of entered) {
+      const keys = new Set([...all].filter(k2 => ![...all].some(o2 => o2 !== k2 && k2.startsWith(o2 + "."))));
+      if (keys.size <= max || isCut(s, samples[i].t, step)) continue;
       const names = [...keys].slice(0, 4).map(k2 => samples[i].elements.find(e => e.key === k2)?.group ?? k2);
       add({ rule: "simultaneous-entrances", severity: "info", t0: samples[i].t, t1: samples[i].t + step, scene: s.sceneAt(samples[i].t), element: names.join(", "), message: `${keys.size} elements appear in the same ${Math.round(step * 1000)} ms`, fix: "stagger them 30–80 ms apart" });
     }
   }
 
   // --- cuts ---
-  const cuts = (s.scenes as Array<{ name: string; start: number }>).filter(sc => sc.start > 0).map(sc => ({ name: sc.name, t: sc.start }));
+  const markerCuts = (s.meta.markers as Array<{ name: string; t: number; kind?: string }>).filter(m => m.kind === "cut" && m.t > 0 && !(s.scenes as Array<{ name: string }>).some(sc => sc.name === m.name));
+  const cuts = markerCuts.length ? markerCuts.map(m => ({ name: m.name, t: m.t })) : (s.scenes as Array<{ name: string; start: number }>).filter(sc => sc.start > 0).map(sc => ({ name: sc.name, t: sc.start }));
   if (on("cut-on-beat") && s.meta.bpm) {
     const beat = 60 / s.meta.bpm, off = s.meta.beatOffset ?? 0;
     for (const c of cuts) {
       const d = Math.abs(((c.t - off) / beat - Math.round((c.t - off) / beat)) * beat);
-      if (d > thr("cut-on-beat", 2 / fps)) add({ rule: "cut-on-beat", severity: "info", t0: c.t, t1: c.t, scene: c.name, element: null, message: `scene "${c.name}" starts ${(d * 1000).toFixed(0)} ms off the ${s.meta.bpm} BPM grid`, fix: "move it to the nearest beat (or treat the scene boundary as an overlap, not a cut)" });
+      if (d > thr("cut-on-beat", 2 / fps)) add({ rule: "cut-on-beat", severity: "info", t0: c.t, t1: c.t, scene: c.name, element: null, message: `cut "${c.name}" at ${c.t.toFixed(2)} s is ${(d * 1000).toFixed(0)} ms off the ${s.meta.bpm} BPM grid`, fix: "move it to the nearest beat" });
     }
   }
   if (on("cut-on-motion")) {
