@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": [
+      "es2023",
+      "dom"
+    ],
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@dolly/core": [
+        "C:/Users/mikke/Desktop/Projects/PromoVideoRenderer/packages/core/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts"
+  ]
+}

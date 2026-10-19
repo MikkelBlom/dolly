@@ -1,0 +1,50 @@
+{
+  "$schema": "storyboard.schema.json",
+  "title": "Snapnote",
+  "purpose": "Browser extension launch video, 15 s, 16:9",
+  "aspect": "16:9",
+  "fps": 60,
+  "bpm": 120,
+  "scenes": [
+    {
+      "name": "pain",
+      "duration": 3,
+      "idea": "Copy-pasting quotes into a notes app loses where they came from",
+      "text": [
+        "Where did that quote |come from?|"
+      ],
+      "transition": "pull-back",
+      "visual": "Notes app full of pasted quotes with 'source?' gaps"
+    },
+    {
+      "name": "select",
+      "duration": 4,
+      "idea": "Select any sentence and press Alt+N",
+      "text": [
+        "Select. Press |Alt+N|."
+      ],
+      "transition": "whip",
+      "visual": "Article page, cursor drags a highlight over a sentence, Alt+N keycaps"
+    },
+    {
+      "name": "card",
+      "duration": 4,
+      "idea": "A tidy note card appears with quote, title and link",
+      "text": [
+        "Quote, title and link. |Done.|"
+      ],
+      "transition": "push",
+      "visual": "Note card springs out of the selection with quote, page title and source URL"
+    },
+    {
+      "name": "end",
+      "duration": 4,
+      "idea": "Name and promise",
+      "text": [
+        "Snapnote",
+        "Notes in |one keystroke|"
+      ],
+      "transition": "zoom-into"
+    }
+  ]
+}

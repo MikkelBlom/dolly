@@ -32,3 +32,32 @@
 **Next steps:**
 - Mikkel decides on build-on vs scratch, the name and the licence.
 - Then Phase 2: scaffold, `core` port, `render` pipeline with real measurements.
+
+## 2026-10-19 (continued) · Claude Code (Opus 5.5) · Phases 2–3 build, acceptance
+**Decisions from Mikkel:** build from scratch; name `dolly`; Apache-2.0; public repo MikkelBlom/dolly.
+
+**Done:**
+- Monorepo: core (maths, camera, runtime, components, themes, storyboard), render (pool, compositor-tree adaptive blur + smear, cache, encode presets, audio mux, stills/sheets, bench, determinism), lint (13 rules), player (`dolly dev`), CLI, MCP server, Claude Code plugin (skill + references + 3 slash commands + bin shim).
+- Price Peek port (`examples/price-peek`).
+- Tests: 32 passing, including golden frames and determinism.
+- Acceptance: a fresh agent made `examples/snapnote` from a one-paragraph brief using only the skill and CLI (final 25.4 s render).
+
+**Results:**
+- Price Peek final 1080p60 with adaptive blur: 41.7 s, vs 20 min baseline.
+- Draft: 9.8 s.
+- One-scene edit: 22 s.
+
+**Bugs found and fixed while measuring:**
+- GPU tile budget dropped layers.
+- `will-change` made raster history-dependent.
+- Inactive scenes showed through `visibility`.
+- Iframe stage scale stuck at 0 (no resize event).
+- `zoomInto` left state behind.
+- Blur-host readiness race.
+- Pixel-based determinism false positives.
+
+**Issues:**
+- Terminal `claude` CLI isn't logged in, so the "fresh session" was a subagent, and marketplace install wasn't exercised.
+- Another session edited the KRW baseline during this session (end-card +0.15 s, uncommitted); experiments pin commit 2a2b909.
+
+**Next steps:** see WORKING_NOTES open questions and FUTURE_IDEAS (warm worker daemon is the biggest agent-loop win).

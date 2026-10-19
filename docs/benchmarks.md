@@ -121,3 +121,30 @@ Blur accuracy after the fixes (`node experiments/verify-blur.ts`): compositor 32
 A host sample at N=1 is bit-identical to the plain page.
 
 Port fidelity vs the original page (`node experiments/compare-baseline.ts`, 18 times, no blur): mean abs error 0–0.70 levels per frame; the remaining differences are the background dot grid's phase (generalised parallax maths) and text anti-aliasing.
+
+## Iteration 2: after the acceptance-test fixes (2026-10-19)
+
+Same machine and project. The blur host now waits for every scene document to be fully ready (a race could leak the t=0 frame into early blurred frames), and the cache was invalidated (`RENDERER` 8).
+
+| Render | Wall | Start-up | Plan | Render + encode | Output fps | vs baseline (20 min) |
+|---|---|---|---|---|---|---|
+| Draft 960×540, 30 fps, no blur (`dolly draft`, no cache) | **9.8 s** | – | – | – | – | 122× |
+| Final 1080p60, adaptive blur, no cache (`dolly render`) | **41.7 s** | 3.1 s | 1.4 s | 32.9 s | 54.6 | 28.8× |
+
+Blur: 14,490 sub-frames (N: 1 → 774 frames, 2 → 124, 4 → 155, 8 → 276, 16 → 277, 32 → 194); 11 frames smeared.
+
+`dolly bench examples/price-peek` (12 workers, 1080p):
+| Stage | fps | ms/frame | Note |
+|---|---|---|---|
+| render(t) in page, 1 worker | 673.6 | 1.5 | the scene's own JS + style/layout |
+| capture PNG, 1 worker | 10.4 | 95.8 | raster + PNG encode + base64 over CDP; 582 KB/frame |
+| plan (motion), 12 workers | 334.7 | 3.0 | |
+| capture 1 sample, 12 workers | 98.7 | 10.1 | |
+| capture 8 samples (compositor blur), 12 workers | 49.1 | 20.4 | 393 sub-frames/s |
+| capture 32 samples, 12 workers | 20.1 | 49.7 | 644 sub-frames/s |
+| encode youtube (PNG decode + h264_nvenc p7) | 133.6 | 7.5 | |
+| encode draft (PNG decode + h264_nvenc p1) | 349.3 | 2.9 | |
+
+Bottleneck: Chromium's PNG encode in capture (CPU). Encoding (133 fps) outruns capture, so it overlaps fully.
+
+Acceptance test (fresh agent, Snapnote, 15 s, from a one-paragraph brief, `examples/snapnote`): draft 6.2 s, final 1080p60 25.4 s, `sheet` ~3 s, `lint` ~3.6 s.

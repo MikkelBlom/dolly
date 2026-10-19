@@ -7,8 +7,8 @@ Every scene is a pure function of time, `render(t)`, so frames render in paralle
 | | Price Peek promo, 30 s, 1080p60 |
 |---|---|
 | Hand-written page + serial recorder (6 fixed blur samples) | ~20 min |
-| dolly final render (adaptive blur, 1–32 samples per frame, NVENC) | **49 s** |
-| dolly draft (960×540, 30 fps) | **11 s** |
+| dolly final render (adaptive blur, 1–32 samples per frame, NVENC) | **42 s** |
+| dolly draft (960×540, 30 fps) | **10 s** |
 | dolly re-render after editing one scene | **22 s** |
 
 Numbers and methods: [`docs/benchmarks.md`](docs/benchmarks.md). Research and design decisions: [`docs/research.md`](docs/research.md). Architecture: [`docs/architecture.md`](docs/architecture.md).

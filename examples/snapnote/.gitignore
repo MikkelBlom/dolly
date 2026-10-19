@@ -1,0 +1,4 @@
+.dolly/
+out/
+# Montserrat and Lora (OFL) copied from the local font folder; install them or add the OFL files to render
+fonts/
