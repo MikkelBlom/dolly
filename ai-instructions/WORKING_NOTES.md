@@ -2,6 +2,7 @@
 
 ## Decisions made (with reasons)
 - **2026-10-19, Mikkel:** build **from scratch** (beside HyperFrames/OpenFilm, not on Remotion/Revideo); name **dolly** (CLI `dolly`); **Apache-2.0**; **public** repo MikkelBlom/dolly. Apache-2.0 also makes borrowing HyperFrames (Apache-2.0) code straightforward, with attribution in NOTICE.
+- **2026-10-20, Mikkel: old global skill retired.** ~/.claude/skills/motion-promo-video is now a short redirect to dolly (the plugin skill, or skills/dolly/SKILL.md in this repo); the original is archived in ~/.claude/skills-archive/motion-promo-video/.
 - **GLOBAL_CLAUDE.md is git-ignored** because the repo is public; Mikkel's global rules are his private instructions.
 - **Capture = `Page.captureScreenshot` PNG on chrome-headless-shell, GPU flags, one browser per worker.** beginFrame works on Windows (shell 151) but gave no speed gain (117 vs 106 fps). Tabs in one browser serialise (1×8 = 38 fps vs 8×1 = 76).
 - **Default workers = ¾ of logical cores, max 16** (12 here; measured knee 12 → 107 fps, 16 → 113).
@@ -29,4 +30,3 @@
 ## Concerns
 - Compositor accumulation relies on unspecified Chromium behaviour (blend precision of render surfaces). `experiments/verify-blur.ts` compares against a CPU float average; keep running it after Chromium updates.
 - `fontCss` (network fonts) makes renders depend on Google Fonts being reachable; self-host for Price Peek once Mikkel OKs downloading the font files.
-- Mikkel's existing global skill `~/.claude/skills/motion-promo-video` overlaps the plugin's `dolly` skill (both trigger on "make a promo video"). Needs his call: retire it, or point it at dolly.
