@@ -42,6 +42,8 @@ export interface SceneContext {
   screen(z: number, name?: string): HTMLElement;
   /** Camera state at t (identity if the video has no camera). */
   camera(t: number): CameraState;
+  /** The shared layers themselves (world-level effects such as a dolly that moves every scene at once). */
+  layers: { stage: HTMLElement; world: HTMLElement; hud: HTMLElement };
   /** Find an element by id within this scene's containers (throws with the scene name if missing). */
   $(id: string): HTMLElement;
   /** Seconds of a marker by name (throws if it doesn't exist). */

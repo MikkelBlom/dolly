@@ -2,14 +2,16 @@
 // CSS custom properties (--c-*, --f-*, --r-*, --s-*) that components read, so nothing hard-codes a
 // colour. Fonts are self-hosted files gated before frame 0, so renders never depend on the network.
 
-export interface FontFace { family: string; src: string; weight?: string; style?: string; stretch?: string }
+export interface FontFace { family: string; /** File to load; omit when a fontCss stylesheet provides it (the face is still verified). */ src?: string; weight?: string; style?: string; stretch?: string }
 
 export interface Theme {
   name: string;
   colors: { bg: string; fg: string; accent: string; muted: string; surface: string; ink: string; [k: string]: string };
   fonts: { display: string; body: string; mono?: string; ui?: string; [k: string]: string | undefined };
-  /** Font files to load (relative to the project, or absolute URLs). */
+  /** Font files to load (relative to the project, or absolute URLs). Every face is verified before frame 0. */
   fontFaces?: FontFace[];
+  /** Stylesheets that declare fonts (e.g. a Google Fonts URL). Prefer self-hosted files: renders then never touch the network. */
+  fontCss?: string[];
   radii: { sm: number; md: number; lg: number; [k: string]: number };
   shadows: { card: string; float: string; [k: string]: string };
   /** Free-form extra tokens exposed as --x-<key>. */
@@ -26,7 +28,8 @@ export function themeCss(t: Theme, base = ""): string {
   for (const [k, v] of Object.entries(t.radii)) vars.push(`--r-${k}:${v}px`);
   for (const [k, v] of Object.entries(t.shadows)) vars.push(`--s-${k}:${v}`);
   for (const [k, v] of Object.entries(t.extra ?? {})) vars.push(`--x-${k}:${v}`);
-  const faces = (t.fontFaces ?? []).map(f => {
+  const faces = (t.fontFaces ?? []).filter(f => f.src).map(f => {
+    if (!f.src) return "";
     const url = /^(https?:|data:|\/)/.test(f.src) ? f.src : base + f.src;
     return `@font-face{font-family:"${f.family}";src:url("${url}");font-weight:${f.weight ?? "400"};font-style:${f.style ?? "normal"};${f.stretch ? `font-stretch:${f.stretch};` : ""}font-display:block}`;
   });

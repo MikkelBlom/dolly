@@ -97,6 +97,11 @@ html,body{margin:0;overflow:hidden;background:#000}
 #dolly-hud{z-index:20}
 .dolly-c{position:absolute;left:0;top:0;width:${W}px;height:${H}px}`;
   document.head.append(style);
+  const sheets = (v.theme.fontCss ?? []).map(href => new Promise<void>((res, rej) => {
+    const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href;
+    l.onload = () => res(); l.onerror = () => rej(new Error(`font stylesheet failed to load: ${href}`));
+    document.head.append(l);
+  }));
 
   const stage = document.createElement("div"); stage.id = "dolly-stage";
   const world = document.createElement("div"); world.id = "dolly-world"; world.className = "dolly-layer";
@@ -136,6 +141,7 @@ html,body{margin:0;overflow:hidden;background:#000}
       video: v, stage: v.stage, aspect: v.aspect ?? "16:9", theme: v.theme,
       get world() { return (w ??= container(world, "world")); },
       get hud() { return (hd ??= container(hud, "hud")); },
+      layers: { stage, world, hud },
       screen: (z: number, layer = `screen${z}`) => container(screenLayer(z), layer),
       camera,
       $: (id: string) => {
@@ -174,7 +180,8 @@ html,body{margin:0;overflow:hidden;background:#000}
     for (const m of mounted) {
       if (!m.def) continue;
       const on = t >= m.def.start && t < m.def.end;
-      if (on !== m.visible) { for (const c of m.containers) c.style.visibility = on ? "" : "hidden"; m.visible = on; }
+      // display:none, not visibility:hidden: a child with visibility:visible would still show through
+      if (on !== m.visible) { for (const c of m.containers) c.style.display = on ? "" : "none"; m.visible = on; }
       if (!on) continue;
       try { m.def.render(time(t, m.def), m.ctx); } catch (e) { throw new DollyRenderError(m.name, t, e); }
     }
@@ -267,9 +274,10 @@ html,body{margin:0;overflow:hidden;background:#000}
     for (const m of mounted) if (m.def?.setup) {
       try { await m.def.setup(m.ctx); } catch (e) { throw new DollyRenderError(m.name, 0, e); }
     }
+    await Promise.all(sheets);
     const faces = v.theme.fontFaces ?? [];
     const results = await Promise.all(faces.map(f => document.fonts.load(`${f.style ?? "normal"} ${f.weight?.split(" ")[0] ?? "400"} 32px "${f.family}"`).then(r => [f, r.length] as const)));
-    const missing = results.filter(([, n]) => n === 0).map(([f]) => `${f.family} ${f.weight ?? ""} (${f.src})`);
+    const missing = results.filter(([, n]) => n === 0).map(([f]) => `${f.family} ${f.weight ?? ""} (${f.src ?? "from fontCss"})`);
     if (missing.length) throw new Error(`fonts failed to load: ${missing.join("; ")}`);
     await document.fonts.ready;
     await Promise.all([...document.images].map(i => i.decode().catch(() => { throw new Error(`image failed to load: ${i.src}`); })));

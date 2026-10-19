@@ -4,11 +4,12 @@
 export function tf(el: HTMLElement | SVGElement, transform: string, opacity = 1): void {
   el.style.transform = transform;
   el.style.opacity = String(opacity);
-  el.style.visibility = opacity <= 0.001 ? "hidden" : "visible";
+  // "" rather than "visible", so a hidden ancestor still hides it
+  el.style.visibility = opacity <= 0.001 ? "hidden" : "";
 }
 
 /** Show or hide without touching transform. */
-export function show(el: HTMLElement, on: boolean): void { el.style.visibility = on ? "visible" : "hidden"; }
+export function show(el: HTMLElement, on: boolean): void { el.style.visibility = on ? "" : "hidden"; }
 
 /** Inject a stylesheet once per document (components call this from their setup). */
 export function ensureStyle(id: string, css: string): void {

@@ -81,8 +81,8 @@ export function lowerThird(layer: HTMLElement, o: { title: string; subtitle?: st
 const END_CSS = `
 .dolly-end{position:absolute;inset:0;background:var(--c-ink);color:#f3f4f7}
 .dolly-end .logo{position:absolute;left:50%;top:21%;font:700 64px/1.75 var(--f-ui,var(--f-body));padding:0 .42em;border-radius:30px 30px 30px 5px;background:#fff;color:var(--c-ink);transform-origin:50% 50%}
-.dolly-end .name{position:absolute;left:0;right:0;top:46%;text-align:center;margin:0;font:800 116px/1 var(--f-display);letter-spacing:-.04em}
-.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;font:500 34px var(--f-body);color:#a5abb8}
+.dolly-end .name{position:absolute;left:0;right:0;top:46%;text-align:center;margin:0;transform-origin:50% 0;font:800 116px/1 var(--f-display);letter-spacing:-.04em}
+.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;transform-origin:50% 0;font:500 34px var(--f-body);color:#a5abb8}
 .dolly-end .tag .dolly-accent{color:var(--c-accent-soft,#8ea0ff)}`;
 
 /** End card: logo springs in, the name types in by character, the tagline by word; a slow push-in. */

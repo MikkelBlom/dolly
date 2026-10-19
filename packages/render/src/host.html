@@ -1,0 +1,60 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>dolly accumulation host</title>
+<!--
+  Motion-blur accumulation in the compositor. NMAX copies of the scene document (iframes) sit at the
+  leaves of a binary tree of groups; each group blends its two children at 50 % opacity with
+  plus-lighter, so the root shows the average of all leaves. A flat stack of 1/N layers quantises every
+  layer to 8 bits (28 dB at N=32); the tree keeps the error at ~0.7 levels for any N (benchmarks.md).
+  To use only the first n = 2^k leaves, groups above that subtree pass their left child through at full
+  opacity and hide the right one. The page is captured once per output frame.
+-->
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  .g { position: absolute; inset: 0; isolation: isolate; }
+  .h { position: absolute; inset: 0; opacity: .5; mix-blend-mode: plus-lighter; isolation: isolate; }
+  .g.pass > .h:first-child { opacity: 1; }
+  .g.pass > .h:last-child { visibility: hidden; }
+  iframe { position: absolute; left: 0; top: 0; border: 0; width: 100vw; height: 100vh; }
+</style>
+<body></body>
+<script>
+  const params = new URLSearchParams(location.search);
+  const NMAX = +(params.get("n") || 32);
+  const src = "frame.html" + (params.get("aspect") ? "?aspect=" + params.get("aspect") : "");
+  if (NMAX & (NMAX - 1)) throw new Error("n must be a power of two");
+  const leaves = [];
+  // levels[d] = groups at depth d (root = depth 0)
+  const levels = [];
+  function build(n, depth) {
+    if (n === 1) { const f = document.createElement("iframe"); f.src = src; leaves.push(f); return f; }
+    const g = document.createElement("div"); g.className = "g";
+    (levels[depth] ??= []).push(g);
+    for (let i = 0; i < 2; i++) { const h = document.createElement("div"); h.className = "h"; h.append(build(n / 2, depth + 1)); g.append(h); }
+    return g;
+  }
+  document.body.append(build(NMAX, 0));
+  const depth = Math.log2(NMAX);
+  let current = -1;
+  // use the leftmost n leaves: the first (depth - log2 n) levels pass through
+  function use(n) {
+    if (n === current) return;
+    const pass = depth - Math.log2(n);
+    levels.forEach((gs, d) => { if (d < pass) gs[0].classList.add("pass"); else gs[0].classList.remove("pass"); });
+    // only the leftmost group per level is ever on the path; others stay as built
+    leaves.forEach((f, i) => { f.style.visibility = i < n ? "" : "hidden"; });
+    current = n;
+  }
+  window.__host = {
+    nmax: NMAX,
+    ready: Promise.all(leaves.map(f => new Promise(r => f.addEventListener("load", r, { once: true }))))
+      .then(() => Promise.all(leaves.map(f => f.contentWindow.__dollyMount))),
+    /** Render one output frame from explicit sub-frame times (computed by Node on an integer grid). */
+    frame(times) {
+      const n = times.length;
+      if (n & (n - 1) || n > NMAX) throw new Error("sample count must be a power of two ≤ " + NMAX);
+      use(n);
+      for (let i = 0; i < n; i++) leaves[i].contentWindow.__dolly.render(times[i]);
+    },
+  };
+</script>
