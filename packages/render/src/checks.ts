@@ -76,9 +76,10 @@ export async function bench(s: Session, o: { frames?: number; outDir: string }):
 export interface DeterminismResult {
   ok: boolean;
   checked: number;
-  /** Frames that differ: "mismatch" is a real state bug; "raster-noise" is sub-perceptual edge
-   * anti-aliasing from Chromium's render-history-dependent layer/raster caching (see WORKING_NOTES). */
-  mismatches: Array<{ t: number; samples: number; scene: string; a: string; b: string; diffPath?: string; meanAbs: number; changedPct: number; strongPct: number; kind: "mismatch" | "raster-noise" }>;
+  /** Frames that differ. "mismatch": the rendered DOM state differs between the two renders (a scene
+   * carries state between frames); `differences` names the elements and properties. "raster-noise": the
+   * state is identical but Chromium's history-dependent raster left faint anti-aliasing differences. */
+  mismatches: Array<{ t: number; samples: number; scene: string; a: string; b: string; diffPath?: string; meanAbs: number; changedPct: number; kind: "mismatch" | "raster-noise"; differences?: Array<{ a: string; b: string }> }>;
 }
 
 function decodeRgb(png: Buffer): Buffer {
@@ -102,10 +103,11 @@ export async function determinism(s: Session, o: { times?: number[]; blur?: bool
   const wa = s.workers[0], wb = s.workers[1] ?? s.workers[0];
   const hash = (b: Buffer) => crypto.createHash("sha1").update(b).digest("hex");
   const A: Buffer[] = [], B: Buffer[] = new Array(times.length);
-  for (const ts of plan) A.push(await wa.frame(ts));
+  const FA: string[][] = [], FB: string[][] = new Array(times.length);
+  for (const ts of plan) { A.push(await wa.frame(ts)); FA.push(await wa.fingerprint(ts.length)); }
   const order = times.map((_, i) => i);
   for (let i = order.length - 1; i > 0; i--) { const j = (i * 7919 + 13) % (i + 1); [order[i], order[j]] = [order[j], order[i]]; }
-  for (const i of order) B[i] = await wb.frame(plan[i]);
+  for (const i of order) { B[i] = await wb.frame(plan[i]); FB[i] = await wb.fingerprint(plan[i].length); }
   const mismatches: DeterminismResult["mismatches"] = [];
   fs.mkdirSync(o.outDir, { recursive: true });
   times.forEach((t, i) => {
@@ -116,13 +118,14 @@ export async function determinism(s: Session, o: { times?: number[]; blur?: bool
     const diffPath = path.join(o.outDir, `det-${t}-diff.png`);
     spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", pa, "-i", pb, "-filter_complex", "[0]format=rgb24[x];[1]format=rgb24[y];[x][y]blend=all_mode=difference,lutrgb=r=val*8:g=val*8:b=val*8", diffPath]);
     const x = decodeRgb(A[i]), y = decodeRgb(B[i]);
-    let sum = 0, changed = 0, strong = 0;
-    for (let k = 0; k < x.length; k++) { const d = Math.abs(x[k] - y[k]); sum += d; if (d > 16) changed++; if (d > 128) strong++; }
-    const meanAbs = sum / x.length, changedPct = (changed / x.length) * 100, strongPct = (strong / x.length) * 100;
-    // A state bug moves or recolours something: some pixels change by more than half the range. Raster
-    // noise is a faint anti-aliasing fringe on moving text (measured max ~98 levels, never > 128).
-    const kind = strongPct > 0.002 || meanAbs > 0.4 ? "mismatch" : "raster-noise";
-    mismatches.push({ t, samples: plan[i].length, scene: s.sceneAt(t), a: a.slice(0, 10), b: b.slice(0, 10), diffPath, meanAbs: +meanAbs.toFixed(3), changedPct: +changedPct.toFixed(3), strongPct: +strongPct.toFixed(4), kind });
+    let sum = 0, changed = 0;
+    for (let k = 0; k < x.length; k++) { const d = Math.abs(x[k] - y[k]); sum += d; if (d > 16) changed++; }
+    const meanAbs = sum / x.length, changedPct = (changed / x.length) * 100;
+    const differences: Array<{ a: string; b: string }> = [];
+    const n = Math.max(FA[i].length, FB[i].length);
+    for (let k = 0; k < n && differences.length < 5; k++) if (FA[i][k] !== FB[i][k]) differences.push({ a: FA[i][k] ?? "(missing)", b: FB[i][k] ?? "(missing)" });
+    const kind = differences.length ? "mismatch" : "raster-noise";
+    mismatches.push({ t, samples: plan[i].length, scene: s.sceneAt(t), a: a.slice(0, 10), b: b.slice(0, 10), diffPath, meanAbs: +meanAbs.toFixed(3), changedPct: +changedPct.toFixed(3), kind, ...(differences.length ? { differences } : {}) });
   });
   return { ok: !mismatches.some(m => m.kind === "mismatch"), checked: times.length, mismatches };
 }

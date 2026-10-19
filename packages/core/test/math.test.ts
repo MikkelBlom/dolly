@@ -191,3 +191,16 @@ test("WCAG contrast", () => {
 });
 
 test("expoOut reaches 1 exactly at 1", () => { assert.equal(expoOut(1), 1); });
+
+test("cameraPath.zoomInto keeps the target pinned and ends centred at max zoom", () => {
+  const cam = cameraPath(STAGE).at(0, { x: 640, y: 360, zoom: 1 }).zoomInto(2, 3, [900, 200], 40).build();
+  const p0 = worldToScreen(cam(2), STAGE, [900, 200]);
+  near(p0[0], 900, 1e-9); near(p0[1], 200, 1e-9);
+  const end = cam(3);
+  near(end.zoom, 40, 1e-9);
+  const p1 = worldToScreen(end, STAGE, [900, 200]);
+  near(p1[0], 640, 1e-9); near(p1[1], 360, 1e-9);
+  const mid = cam(2.5), pm = worldToScreen(mid, STAGE, [900, 200]);
+  assert.ok(pm[0] > 640 && pm[0] < 900, "target travels toward the centre");
+  assert.deepEqual(cam(1), { x: 640, y: 360, zoom: 1, rotate: 0 });
+});

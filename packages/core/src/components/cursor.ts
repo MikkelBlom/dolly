@@ -2,7 +2,7 @@
 // ripple on each click. Targets can be functions, measured every frame, so the cursor follows tilting or
 // animating UI.
 import { ensureStyle, tf } from "../dom.ts";
-import { cubicInOut, expoOut, type Easing } from "../easing.ts";
+import { cubicInOut, ease, expoOut, type Easing, type EasingName } from "../easing.ts";
 import { arcControl, clamp, prog, quad, type Vec2 } from "../math.ts";
 
 const CSS = `
@@ -10,7 +10,8 @@ const CSS = `
 .dolly-ripple{position:absolute;left:0;top:0;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:2px solid var(--c-accent);z-index:4}`;
 
 export type Target = Vec2 | (() => Vec2);
-export interface CursorStop { t: number; at: Target; ease?: Easing; bend?: number }
+/** One stop of the path: arrive at `at` by time t (ease: a function or a name like "quartInOut"). */
+export interface CursorStop { t: number; at: Target; ease?: Easing | EasingName; bend?: number }
 
 export interface CursorHandle {
   el: SVGSVGElement;
@@ -49,7 +50,7 @@ export function cursor(layer: HTMLElement, o: CursorOptions): CursorHandle {
       const a = o.path[i - 1], b = o.path[i];
       if (t >= a.t) {
         const A = resolve(a.at), B = resolve(b.at);
-        const e = (b.ease ?? cubicInOut)(prog(t, a.t, b.t - a.t));
+        const e = ease(b.ease, cubicInOut)(prog(t, a.t, b.t - a.t));
         p = quad(A, arcControl(A, B, b.bend ?? 0.25), B, e);
       }
     }

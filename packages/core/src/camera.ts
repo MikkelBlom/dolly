@@ -93,7 +93,36 @@ export class CameraPath {
     return this.move(t0, t1, fitRect(rect, this.stage, padding), ease);
   }
 
-  build(): CameraFn { return camera(this.tracks, this.stage); }
+  private dives: Array<{ t0: number; t1: number; to: readonly [number, number]; maxZoom: number }> = [];
+
+  /**
+   * Dive into a world point until it fills the screen (the zoom-into-element transition): exponential
+   * zoom to `maxZoom` with the point pinned where it was on screen at t0, sliding to the centre. Use it
+   * on a dark element whose fill becomes the next scene's background. Holds the end state after t1.
+   */
+  zoomInto(t0: number, t1: number, point: readonly [number, number], maxZoom = 60): this {
+    this.hold(t0);
+    this.dives.push({ t0, t1, to: point, maxZoom });
+    return this;
+  }
+
+  build(): CameraFn {
+    const base = camera(this.tracks, this.stage), dives = [...this.dives], stage = this.stage;
+    if (!dives.length) return base;
+    return t => {
+      const d = [...dives].reverse().find(x => t >= x.t0);
+      if (!d) return base(t);
+      const c0 = base(d.t0);
+      const p = Math.min(1, (t - d.t0) / (d.t1 - d.t0));
+      const zoom = c0.zoom * Math.exp(Math.log(d.maxZoom / c0.zoom) * Math.pow(p, 2.2));
+      // keep the point where it was on screen, moving it to the centre with quartInOut
+      const s0 = worldToScreen(c0, stage, d.to);
+      const e = p < 0.5 ? 8 * p ** 4 : 1 - (-2 * p + 2) ** 4 / 2;
+      const sx = s0[0] + (stage.width / 2 - s0[0]) * e, sy = s0[1] + (stage.height / 2 - s0[1]) * e;
+      // centre such that the point lands at (sx, sy): point = centre + (s - mid) / zoom (no roll)
+      return { x: d.to[0] - (sx - stage.width / 2) / zoom, y: d.to[1] - (sy - stage.height / 2) / zoom, zoom, rotate: 0 };
+    };
+  }
 }
 
 export const cameraPath = (stage: Viewport): CameraPath => new CameraPath(stage);

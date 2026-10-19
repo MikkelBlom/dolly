@@ -57,7 +57,7 @@ export function smearVector(m: MotionSample, n: number, b: BlurSettings): [numbe
 }
 
 /** Version of the capture pipeline, part of every cache key. 4: GPU memory budget raised (heavy blur dropped layers). 5: greyscale text AA. 6: no will-change on masked text (history-dependent raster scale). 7: no low-res tiles. */
-export const RENDERER = 7; // component CSS changes are covered by the bundle hash
+export const RENDERER = 8; // component CSS changes are covered by the bundle hash
 
 export interface KeyInputs {
   globalHash: string;

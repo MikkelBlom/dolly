@@ -53,7 +53,7 @@ Springs: `spring(t, { freq, zeta, velocity })` or `spring(t, { stiffness, dampin
 
 ## Camera
 
-`cameraPath(stage)` → `.at(t, {x, y, zoom, rotate}, ease?)`, `.move(t0, t1, to, ease)`, `.whip(t0, t1, to)`, `.pullBack(t0, t1, to)`, `.push(t0, t1, amount=0.06)`, `.focus(t0, t1, rect, padding)`, `.hold(t)`, `.build()`.
+`cameraPath(stage)` → `.at(t, {x, y, zoom, rotate}, ease?)`, `.move(t0, t1, to, ease)`, `.whip(t0, t1, to)`, `.pullBack(t0, t1, to)`, `.push(t0, t1, amount=0.06)`, `.focus(t0, t1, rect, padding)`, `.hold(t)`, `.zoomInto(t0, t1, [x, y], maxZoom=60)` (exponential dive with the world point pinned on screen, sliding to the centre; holds the end state afterwards, so put it last), `.build()`. Keys must be added in time order (an earlier key throws and names the property). Easing arguments take a function or a name.
 Or `camera({ x: Key[], y: Key[], zoom: Key[], rotate: Key[] }, stage)`.
 State `{ x, y, zoom, rotate }` = world point at screen centre. `cameraTransform(c, stage)`, `worldToScreen(c, stage, p)`, `screenToWorld`, `fitRect(rect, stage, padding)`, `parallax(c, depth, stage)` (depth 0.5 = half speed), `cameraDisplacement(a, b, stage)`.
 
@@ -61,29 +61,32 @@ State `{ x, y, zoom, rotate }` = world point at screen centre. `cameraTransform(
 
 | Component | Signature | Use |
 |---|---|---|
-| Masked type | `masked(el, "text \|accent\|", { chars?, accentClass?, prepend? })` → units; `typeIn(units, t, tin, tout?, { stagger, dur, exitDur, rise=140, rotate=6 })`; `typeInDone(n, tin, o)` | headlines (words), prices/names (chars) |
+| Masked type | `masked(el, "text |accent| \n line 2", { chars?, accentClass?, prepend? })` → units (plain text only; `
+` breaks lines; HTML throws); `typeIn(units, t, tin, tout?, { stagger, dur, exitDur, rise=140, rotate=6 })`; `typeInDone(n, tin, o)` | headlines (words), prices/names (chars) |
 | Odometer | `roll(a, b, p)` (numbers), `slide(a, b, p)` (labels), `setHtml(el, html)`, `countUp(a, b, p, fmt)` | values that change |
 | Badge | `badge(text, cls?)` → `.dolly-badge` | price tags, "New" |
 | Chip / card | classes `.dolly-chip`, `.dolly-card`, `.dolly-label` (`primitivesCss()`) | |
 | Pop | `popIn(el, t, t0, { freq=2.1, zeta=0.42, rotate=-8, extra })` | badges grow from their sharp corner |
 | Fly | `flyIn(el, t, t0, { dx, dy, rotate=9, scale0=0.7, spring, extra })` | cards arriving |
 | Reactions | `land(t, t0, amount=0.035)` squash; `bob(t, i, amp=4)` idle drift | overlap & follow-through |
-| Cursor | `cursor(layer, { path: [{ t, at: [x,y] \| () => [x,y], ease?, bend? }], clicks: [t…], from?, to? })` → `.render(t)`, `.pos(t)` | UI demos; targets measured live |
+| Cursor | `cursor(layer, { path: [{ t, at: [x,y] | () => [x,y], ease?: fn or name, bend? }], clicks: [t…], from?, to? })` → `.render(t)`, `.pos(t)` → `[x, y]` | UI demos; targets measured live |
 | Typing | `typing(t, { t0, gap, text, format?, focused })` → `{ n, typed, last, html }` | inputs; caret blinks only when idle |
 | 3D tilt | `tilt(ry, rx=0, perspective=1500, extra)`; `swingIn(el, t, t0, { dx=520, from=-38, to=-10, drift=5 })` | UI cards as objects |
 | Grid | `parallaxGrid(layer, { gap=28, dot=1.3, color, depth=0.5 })` → `(cam, stage, extraZoom)` | readable camera moves |
 | Zoom into | `zoomInto(layer, target, t, t0, t1, { maxScale=60, fadeText=3.5, stage })` → `{ z, css, origin }` | dive into a dark element → end card |
-| End card | `endCard(layer, { logo, name, tagline, at: { logo, name, tag }, pushFrom, pushDur })` → `{ el, render(t) }` | |
+| End card | `endCard(layer, { logo, name, tagline, at: { logo, name, tag }, pushFrom, pushDur, colors?: { bg, name, tagline, accent, logoBg, logoFg, logoRadius } })` → `{ el, render(t) }` | defaults: bg `--c-ink`, light text |
 | Lower third | `lowerThird(layer, { title, subtitle, x, y })` → `(t, tin, tout)` | names/captions |
 
-DOM helpers: `tf(el, transform, opacity)`, `show(el, on)`, `ensureStyle(id, css)`, `h(tag, attrs, ...children)`, `html(str)`, `escapeHtml`, `stagePoint(el, fx, fy)`, `stageRect(el)`.
+DOM helpers: `tf(el, transform, opacity)` (opacity ≤ 0.001 also hides), `show(el, on)`, `ensureStyle(id, css)`, `h(tag, attrs, ...children)`, `html(str)`, `escapeHtml`, `stagePoint(el, fx = 0.5, fy = 0.5)` → `[x, y]` (fx/fy = fractions of the element's box), `stageRect(el)` → `{ x, y, w, h }`. Both in stage px from live layout (transforms included).
+
+Attributes: `data-name="…"` names an element in lint/inspect output; `data-dolly-decor` on a container marks background text that the text rules skip.
 
 ## Theme
 
 ```ts
 defineTheme({
   name, colors: { bg, fg, accent, muted, surface, ink, … }, fonts: { display, body, ui?, mono?, … },
-  fontFaces: [{ family, src: "fonts/X-Bold.woff2", weight: "700" }],   // verified before frame 0
+  fontFaces: [{ family, src: "fonts/X-Bold.woff2", weight: "700", style?: "italic" }],   // verified before frame 0
   fontCss?: ["https://…"],                                             // avoid: renders then need the network
   radii: { sm, md, lg }, shadows: { card, float }, extra?: {},
 })
@@ -96,4 +99,4 @@ CSS variables: `--c-<color>`, `--f-<font>`, `--r-<radius>`, `--s-<shadow>`, `--x
 
 ## Runtime (window.__dolly in a scene page)
 
-`render(t)`, `motion(t0, t1)` → `{ px, camera, cameraVec, element }`, `inspect(t)` → visible text elements with rect, font size, colours, opacity; `meta`; `ready`; `setSmear(dx, dy)`. The player and renderer use these; you rarely need them directly.
+`render(t)`, `motion(t0, t1)` → `{ px, camera, cameraVec, element }`, `inspect(t, { all })` → visible elements with rect, font size, colours, opacity; `fingerprint()` → rendered-state lines (determinism check); `meta`; `ready`; `setSmear(dx, dy)`. `console.log` in scenes is forwarded to `dolly still` output.

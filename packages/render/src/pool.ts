@@ -14,13 +14,20 @@ export class Worker {
   private host: CdpSession | null = null;
   private hostOpening: Promise<CdpSession> | null = null;
   meta: any;
+  /** console output from the scene page (console.log in a scene reaches the CLI) */
+  logs: string[] = [];
   constructor(id: number, o: WorkerOptions) { this.id = id; this.o = o; }
+
+  drainLogs(): string[] { const l = this.logs; this.logs = []; return l; }
 
   private q(): string { return this.o.aspect ? `?aspect=${this.o.aspect}` : ""; }
 
   async start(): Promise<this> {
     this.browser = await launch({ gpu: this.o.gpu, width: this.o.width, height: this.o.height });
     this.plain = await this.browser.newPage();
+    this.plain.on("Runtime.consoleAPICalled", (p: any) => {
+      if (this.logs.length < 500) this.logs.push(`${p.type}: ${(p.args ?? []).map((x: any) => x.value !== undefined ? (typeof x.value === "string" ? x.value : JSON.stringify(x.value)) : x.description ?? x.type).join(" ")}`);
+    });
     this.meta = await openScene(this.plain, `${this.o.baseUrl}/frame.html${this.q()}`, this.o.width, this.o.height).catch(async e => {
       const detail = await this.plain.evaluate<string | undefined>("window.__dollyError").catch(() => undefined);
       throw new Error(detail ? detail.split("\n")[0] : e.message);
@@ -60,6 +67,11 @@ export class Worker {
 
   motion(t0: number, t1: number): Promise<{ px: number; camera: number; cameraVec: [number, number]; element: string | null }> {
     return this.plain.evaluate(`__dolly.motion(${t0}, ${t1})`);
+  }
+
+  /** Rendered DOM state behind the last frame() call (plain page for 1 sample, the host's leaves otherwise). */
+  async fingerprint(samples: number): Promise<string[]> {
+    return samples > 1 ? (await this.hostPage()).evaluate<string[]>("__host.fingerprint()") : this.plain.evaluate<string[]>("__dolly.fingerprint()");
   }
 
   evaluate<T>(expr: string): Promise<T> { return this.plain.evaluate<T>(expr); }

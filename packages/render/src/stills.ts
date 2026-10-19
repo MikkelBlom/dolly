@@ -6,9 +6,9 @@ import { Session, runQueue } from "./session.ts";
 import { DEFAULT_BLUR, sampleCounts, shutterSeconds, subTimes } from "./frames.ts";
 import { screenshot } from "./browser.ts";
 
-export interface StillOptions { times: number[]; outDir: string; blur?: boolean; prefix?: string; format?: "png" | "jpeg" }
+export interface StillOptions { times: number[]; outDir: string; blur?: boolean; prefix?: string; format?: "png" | "jpeg"; inspect?: boolean }
 
-export interface Still { t: number; path: string; scene: string; samples: number }
+export interface Still { t: number; path: string; scene: string; samples: number; inspect?: unknown }
 
 /** Render frames at the given times. With blur, the sample count comes from the motion at that time. */
 export async function stills(s: Session, o: StillOptions): Promise<Still[]> {
@@ -27,7 +27,7 @@ export async function stills(s: Session, o: StillOptions): Promise<Still[]> {
     const buf = await w.frame(times, o.format ?? "png");
     const file = path.join(o.outDir, `${o.prefix ?? "still"}-${t.toFixed(2).replace(".", "_")}.${o.format === "jpeg" ? "jpg" : "png"}`);
     fs.writeFileSync(file, buf);
-    out[i] = { t, path: file, scene: s.sceneAt(t), samples: n };
+    out[i] = { t, path: file, scene: s.sceneAt(t), samples: n, ...(o.inspect ? { inspect: await w.evaluate(`__dolly.inspect(${t}, { all: true })`) } : {}) };
   });
   return out;
 }

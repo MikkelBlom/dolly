@@ -16,7 +16,7 @@ export default defineScene({
   end: 30,
   setup(ctx) {
     ensureStyle("pp-end", `.dolly-end .dolly-badge{background:#262a33;color:#c9cdd6;box-shadow:none;transform-origin:50% 50%}`);
-    card = endCard(ctx.screen(60, "end"), { logo: "kr.", name: "Price Peek", tagline: "Any price, in |your| currency.", at: T_F, pushFrom: T_E.zoomEnd, pushDur: 4.65 });
+    card = endCard(ctx.screen(60, "end"), { logo: "kr.", name: "Price Peek", tagline: "Any price, in |your| currency.", at: T_F, pushFrom: T_E.zoomEnd, pushDur: 4.65, colors: { logoRadius: "30px 30px 30px 5px" } });
     for (const [s, x, y] of FLOATS) {
       const b = badge(s); b.style.left = x + "px"; b.style.top = y + "px";
       card.el.insertBefore(b, card.el.firstChild);

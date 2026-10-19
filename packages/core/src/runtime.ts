@@ -19,6 +19,8 @@ export interface FrameElementInfo {
   shown: number;
   /** Part of a value-change transition (odometer roll, slide), not a resting state. */
   transient?: boolean;
+  /** Inside [data-dolly-decor]: background texture (mock article text, old list items) the text rules skip. */
+  decor?: boolean;
   text?: string;
   /** Rendered font size in stage px (includes transforms). */
   fontSize?: number;
@@ -59,6 +61,12 @@ export interface DollyApi {
    * motion-blur samples on fast camera moves). (0, 0) turns it off. Screen-space layers stay sharp.
    */
   setSmear(dx: number, dy: number): void;
+  /**
+   * Rendered state of every visible element (computed transform, opacity, colours, filter, text, box),
+   * one line per element, for the current frame. Two renders of the same t must give identical lines;
+   * the determinism check compares these rather than pixels (Chromium adds raster noise of its own).
+   */
+  fingerprint(): string[];
   inspect(t: number, opts?: { all?: boolean }): InspectResult;
   /** Refit the stage to the window (called on resize). */
   fit(): number;
@@ -291,7 +299,7 @@ html,body{margin:0;overflow:hidden;background:${bg === "transparent" ? "transpar
         key = pathKey(el.parentElement.parentElement ?? el);
       }
       out.push({
-        name: describe(el), group, key, shown: +shown.toFixed(3), ...(el.closest(".dolly-rl") ? { transient: true } : {}), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
+        name: describe(el), group, key, shown: +shown.toFixed(3), ...(el.closest(".dolly-rl") ? { transient: true } : {}), ...(el.closest("[data-dolly-decor]") ? { decor: true } : {}), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
         rect: { x: (r.left - st.left) / scale, y: (r.top - st.top) / scale, w: r.width / scale, h: r.height / scale },
         opacity: +op.toFixed(3),
         ...(own ? { text: own, fontSize: +(parseFloat(cs.fontSize) * ratio / scale).toFixed(2), color: cs.color, background: bgc ?? bg } : {}),
@@ -331,6 +339,18 @@ html,body{margin:0;overflow:hidden;background:${bg === "transparent" ? "transpar
   const api: DollyApi = {
     version: 1, meta, ready: null as unknown as Promise<DollyMeta>, render: renderAt, motion, inspect, fit: () => (scale = fit()),
     setSmear: (dx: number, dy: number) => { smear = [dx, dy]; applySmear(lastT); },
+    fingerprint: () => {
+      const st = stage.getBoundingClientRect();
+      const out: string[] = [];
+      for (const el of stage.querySelectorAll("*")) {
+        if (!el.checkVisibility({ opacityProperty: true, visibilityProperty: true })) continue;
+        const c = getComputedStyle(el), r = el.getBoundingClientRect();
+        const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim();
+        const box = [r.left - st.left, r.top - st.top, r.width, r.height].map(x => (x / scale).toFixed(2)).join(",");
+        out.push(`${describe(el)} [${pathKey(el)}] box=${box} transform=${c.transform} opacity=${c.opacity} color=${c.color} bg=${c.backgroundColor} filter=${c.filter} clip=${c.clipPath}${own ? ` text=${JSON.stringify(own)}` : ""}`);
+      }
+      return out;
+    },
   };
   window.__dolly = api;
 

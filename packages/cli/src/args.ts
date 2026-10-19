@@ -26,7 +26,7 @@ export function parseArgs(argv: string[]): Parsed {
 }
 
 const SHORT: Record<string, string> = { t: "times", o: "out", w: "workers", j: "json", h: "help" };
-const BOOLEAN = new Set(["json", "help", "blur", "cache", "audio", "open", "quiet", "force", "gpu", "strict", "verbose", "all", "mobile"]);
+const BOOLEAN = new Set(["json", "help", "blur", "cache", "audio", "open", "quiet", "force", "gpu", "strict", "verbose", "all", "mobile", "inspect"]);
 
 export const num = (v: string | boolean | undefined, def?: number): number | undefined => {
   if (v === undefined || v === true || v === false) return def;

@@ -7,10 +7,11 @@
 | `dolly sheet <dir>` | 4×3 labelled contact sheet PNG | ~5 s |
 | `dolly still <dir> --times a,b` | PNG frames (`--blur` for motion blur) | ~4 s |
 | `dolly draft <dir>` | 960×540, 30 fps, no blur, NVENC p1 → `out/draft.mp4` | ~11 s |
-| `dolly render <dir>` | 1080p60, adaptive blur, `youtube` preset → `out/<name>.mp4` | ~50 s; re-renders only changed scenes |
+| `dolly render <dir>` | 1080p60, adaptive blur, `youtube` preset → `out/<project folder name>.mp4` | ~50 s; re-renders only changed scenes |
 | `dolly render <dir> --from 6 --to 8` | a range (check a transition) | seconds |
 | `dolly lint <dir>` | motion-grammar findings | ~10 s |
-| `dolly diff <dir>` | determinism check | ~10 s |
+| `dolly diff <dir>` | determinism check (compares rendered element state; names what differs) | ~10 s |
+| `dolly still <dir> --times t --inspect` | element boxes, sizes, colours, camera and scene console output at t | ~4 s |
 | `dolly bench <dir>` | frames/s per stage | ~30 s |
 
 Most of a short command's time is starting Chromium; keep checks batched (one sheet rather than many stills).

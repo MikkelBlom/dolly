@@ -17,23 +17,28 @@ export interface MaskedOptions {
   prepend?: boolean;
 }
 
-/** Fill `el` with masked units and return them (the spans that move). */
+/**
+ * Fill `el` with masked units and return them (the spans that move). "|word|" is an accent; "\n" is a
+ * line break. Plain text only: HTML in the text throws (it would be escaped and shown literally).
+ */
 export function masked(el: HTMLElement, text: string, opts: MaskedOptions = {}): HTMLElement[] {
   ensureStyle("masked", CSS);
-  const parts = text.split(/(\|[^|]*\|)/).filter(Boolean);
-  let out = "";
-  for (const part of parts) {
-    const accent = part.startsWith("|") && part.endsWith("|") && part.length > 1;
-    const s = accent ? part.slice(1, -1) : part;
-    const units = opts.chars ? [...s] : s.split(/(\s+)/);
-    for (const u of units) {
-      if (u === "") continue;
-      if (!opts.chars && /^\s+$/.test(u)) { out += " "; continue; }
-      const cls = accent ? ` ${opts.accentClass ?? "dolly-accent"}` : "";
-      out += `<span class="dolly-wm"><span class="dolly-wi${cls}">${u === " " ? "&nbsp;" : escapeHtml(u)}</span></span>`;
+  if (/<\/?[a-z]/i.test(text)) throw new Error(`masked(): text contains HTML (${JSON.stringify(text.slice(0, 40))}); use \\n for a line break and |…| for the accent`);
+  const unitsHtml = (line: string): string => {
+    let out = "";
+    for (const part of line.split(/(\|[^|]*\|)/).filter(Boolean)) {
+      const accent = part.startsWith("|") && part.endsWith("|") && part.length > 1;
+      const s = accent ? part.slice(1, -1) : part;
+      for (const u of opts.chars ? [...s] : s.split(/(\s+)/)) {
+        if (u === "") continue;
+        if (!opts.chars && /^\s+$/.test(u)) { out += " "; continue; }
+        const cls = accent ? ` ${opts.accentClass ?? "dolly-accent"}` : "";
+        out += `<span class="dolly-wm"><span class="dolly-wi${cls}">${u === " " ? "&nbsp;" : escapeHtml(u)}</span></span>`;
+      }
     }
-  }
-  el.insertAdjacentHTML(opts.prepend === false ? "beforeend" : "afterbegin", out);
+    return out;
+  };
+  el.insertAdjacentHTML(opts.prepend === false ? "beforeend" : "afterbegin", text.split("\n").map(unitsHtml).join("<br>"));
   return [...el.querySelectorAll<HTMLElement>(".dolly-wi")];
 }
 

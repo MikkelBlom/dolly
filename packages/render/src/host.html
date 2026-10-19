@@ -50,8 +50,13 @@
   window.__host = {
     nmax: NMAX,
     ready: Promise.all(leaves.map(f => new Promise(r => f.addEventListener("load", r, { once: true }))))
-      .then(() => Promise.all(leaves.map(f => f.contentWindow.__dollyMount))),
+      // wait for each document to be fully ready (fonts, setup): its startup ends with render(0), which
+      // would otherwise land after our first sub-frame render and leak the t=0 scene into the average
+      .then(() => Promise.all(leaves.map(f => f.contentWindow.__dollyMount)))
+      .then(apis => Promise.all(apis.map(api => api.ready))),
     /** Render one output frame from explicit sub-frame times (computed by Node on an integer grid). */
+    /** Fingerprints of the leaves used by the last frame (see __dolly.fingerprint). */
+    fingerprint() { return leaves.slice(0, current).flatMap((f, i) => f.contentWindow.__dolly.fingerprint().map(l => "leaf" + i + " " + l)); },
     frame(times, smear) {
       const n = times.length;
       if (n & (n - 1) || n > NMAX) throw new Error("sample count must be a power of two ≤ " + NMAX);

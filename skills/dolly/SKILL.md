@@ -13,15 +13,17 @@ You work through the `dolly` CLI (on PATH via this plugin, or `npm link` from th
 
 1. **Facts and brand.** Read the product: README, UI code, store images, existing art. Use its real UI, copy, numbers, fonts and colours. Numbers on screen must be computed the way the product computes them (copy the logic in).
 2. **Storyboard** (`storyboard.json`, see `references/storyboard.md`): 4–6 scenes for ~30 s — hook → promise with proof → differentiator → control/second capability → end card. One idea per scene, headline ≤ 9 words, how the camera gets there. `dolly storyboard check storyboard.json`. Show it to the user if the brief was loose.
-3. **Scaffold**: `dolly new <dir> --storyboard storyboard.json` (or `--title … --aspect 9:16`). It renders immediately.
-4. **Build scenes** in `scenes/*.ts` with the API below. Replace placeholder cards with the product's real UI rebuilt in HTML/CSS.
-5. **Look**: `dolly sheet <dir>` → read the PNG. Zoom in with `dolly sheet <dir> --from 6 --to 8 --cols 4 --rows 2` or `dolly still <dir> --times 6.9,7.0`. Check clipped text, overlaps, mask slivers, wrapped words (add `white-space:nowrap`), things off-frame, empty holds.
-6. **Lint**: `dolly lint <dir>` — fix errors; judge warnings. Fix the *rule's cause*, not the symptom.
+3. **Scaffold**: `dolly new <dir> --storyboard storyboard.json` (or `--title … --aspect 9:16`). It writes a project that is ready to render: `dolly sheet <dir>` works right away.
+4. **Build scenes** in `scenes/*.ts` with the API below. Replace placeholder cards with the product's real UI rebuilt in HTML/CSS. `references/examples.md` has a complete UI-mock scene (cursor drag with live measurement), a dive into an element that becomes the end card, and a themed end card — read it before your first scene.
+5. **Look**: `dolly sheet <dir>` → read the PNG (the file name changes when content or arguments change, so you never re-read a stale sheet). Zoom in with `dolly sheet <dir> --from 6 --to 8 --cols 4 --rows 2` or `dolly still <dir> --times 6.9,7.0`. Check clipped text, overlaps, mask slivers, wrapped words (add `white-space:nowrap`), things off-frame, empty holds.
+6. **Lint**: `dolly lint <dir>` — fix errors; judge warnings. Fix the *rule's cause*, not the symptom. Mark background texture (mock article paragraphs, old list items) with `data-dolly-decor` on a container so text rules skip it.
 7. **Draft**: `dolly draft <dir>` (960×540, 30 fps, no blur, seconds) for pacing. The user reviews drafts; the player (`dolly dev <dir>`) is the fastest way for a human to scrub.
 8. **Final** only after the draft is approved: `dolly render <dir>` (1080p60, adaptive motion blur, NVENC). Then `dolly sheet <dir> --blur --from <whip-0.3> --to <whip+0.3>` to check blur on fast moves.
 9. **Deliver**: the MP4 path, the beat timings (markers), and what you could not verify. Commit if it's a repo. Never upload or publish without asking.
 
-Run renders in the background when they take more than a minute. `dolly diff <dir>` proves determinism (frames rendered twice in different orders on different workers must match).
+Run renders in the background when they take more than a minute. `dolly diff <dir>` proves determinism: it renders frames twice in different orders on different workers and compares the rendered state of every element; a failure names the element and property that differ. ("Raster noise" lines are harmless anti-aliasing differences from Chromium.)
+
+**Debugging a value at time t**: `dolly still <dir> --times 4.8 --inspect --json` returns every visible element's box (stage px), font size, colours and opacity plus the camera, and any `console.log` output from your scenes. In the player (`dolly dev`), `window.player.seek(4.8)` and the bounds/camera overlays show the same.
 
 ## Project shape
 
@@ -68,12 +70,14 @@ export default defineScene({
 - Time: `prog(t, t0, dur)` 0..1 · `keys(t, [[t0, v0], [t1, v1, "quartInOut"]])` (easing belongs to the arriving segment) · `stagger(i, n, { each })` · `snap(x, step)`.
 - Easing: `expoOut` (entrances), `quartInOut` (camera moves), `sineInOut` (drifts), `cubicInOut`, `backOut()`, `cubicBezier(…)`; never linear for UI.
 - Springs: `spring(t - t0, { freq: 1.8, zeta: 0.5 })` or `{ stiffness, damping, mass }`, `appleSpring(0.5, 0.15)`; `springOvershoot`, `springSettleTime`.
-- Camera: `cameraPath(stage).at / move / whip / pullBack / push / focus(rect) / hold`, `parallax(cam, depth, stage)`, `worldToScreen`.
-- Type: `masked(el, "text |accent|", { chars })` + `typeIn(units, t, tin, tout, { stagger, dur })`.
+- Camera: `cameraPath(stage).at / move / whip / pullBack / push / focus(rect) / hold / zoomInto`, `parallax(cam, depth, stage)`, `worldToScreen`. Easing arguments everywhere take a function or a name (`"quartInOut"`).
+- Type: `masked(el, "text |accent|
+second line", { chars })` (plain text; `
+` breaks lines) + `typeIn(units, t, tin, tout, { stagger, dur })`.
 - Values: `roll(old, new, p)` odometer (numbers only) · `slide(old, new, p)` (labels) · `setHtml(el, html)` (no-op if unchanged) · `countUp`.
 - Primitives: `badge(text)`, classes `dolly-chip`, `dolly-card`, `dolly-label`; `popIn` (springy grow from corner), `flyIn` (spring from offset, 0.7 scale, ±9°), `land(t, t0)` impact squash, `bob(t, i)` idle drift.
-- UI demo: `cursor(layer, { path: [{ t, at: [x, y] | () => stagePoint(el) }], clicks })` (curved paths, press squash, ripple, live targets) · `typing(t, { t0, gap, text, focused })` · `tilt(ry, rx)` / `swingIn(el, t, t0)` 3D cards · `stagePoint(el)`.
-- Transitions & frames: `zoomInto(layer, el, t, t0, t1)` (dive into an element until its fill is the screen) · `endCard(layer, {...})` · `lowerThird(layer, {...})` · `parallaxGrid(layer, { depth })`.
+- UI demo: `cursor(layer, { path: [{ t, at: [x, y] | () => stagePoint(el) }], clicks })` (curved paths, press squash, ripple, live targets) · `typing(t, { t0, gap, text, focused })` · `tilt(ry, rx)` / `swingIn(el, t, t0)` 3D cards · `stagePoint(el, fx, fy)` → `[x, y]`, `stageRect(el)` → `{ x, y, w, h }` (stage px, live layout).
+- Transitions & frames: `cameraPath(…).zoomInto(t0, t1, [worldX, worldY], 60)` (dive into a world element until its fill is the screen; see examples) · `endCard(layer, { …, colors })` · `lowerThird(layer, {...})` · `parallaxGrid(layer, { depth })`.
 - DOM: `tf(el, transform, opacity)` (hides at 0 opacity), `ensureStyle(id, css)`, `h()`, `html()`.
 - Theme: `defineTheme({ colors, fonts, fontFaces, radii, shadows })` → CSS vars `--c-accent`, `--f-display`, `--r-lg`, `--s-float`… Self-host fonts in `fonts/` and list them in `fontFaces`.
 

@@ -80,17 +80,31 @@ export function lowerThird(layer: HTMLElement, o: { title: string; subtitle?: st
 }
 
 const END_CSS = `
-.dolly-end{position:absolute;inset:0;background:var(--c-ink);color:#f3f4f7}
-.dolly-end .logo{position:absolute;left:50%;top:21%;font:700 calc(var(--stage-h,720px)*.0889)/1.75 var(--f-ui,var(--f-body));padding:0 .42em;border-radius:.47em .47em .47em .08em;background:#fff;color:var(--c-ink);transform-origin:50% 50%}
+.dolly-end{position:absolute;inset:0;background:var(--end-bg,var(--c-ink));color:var(--end-name,#f3f4f7)}
+.dolly-end .logo{position:absolute;left:50%;top:21%;font:700 calc(var(--stage-h,720px)*.0889)/1.75 var(--f-ui,var(--f-body));padding:0 .42em;border-radius:var(--end-logo-radius,.3em);background:var(--end-logo-bg,#fff);color:var(--end-logo-fg,var(--c-ink));transform-origin:50% 50%}
 .dolly-end .name{position:absolute;left:0;right:0;top:46%;text-align:center;margin:0;transform-origin:50% 0;font:800 calc(var(--stage-h,720px)*.161)/1 var(--f-display);letter-spacing:-.04em}
-.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;transform-origin:50% 0;font:500 calc(var(--stage-h,720px)*.047) var(--f-body);color:#a5abb8}
-.dolly-end .tag .dolly-accent{color:var(--c-accent-soft,#8ea0ff)}`;
+.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;transform-origin:50% 0;font:500 calc(var(--stage-h,720px)*.047) var(--f-body);color:var(--end-tagline,#a5abb8)}
+.dolly-end .tag .dolly-accent{color:var(--end-accent,var(--c-accent-soft,#8ea0ff))}`;
 
-/** End card: logo springs in, the name types in by character, the tagline by word; a slow push-in. */
-export function endCard(layer: HTMLElement, o: { logo: string; name: string; tagline: string; at: { logo: number; name: number; tag: number }; pushFrom: number; pushDur: number }): { el: HTMLElement; render(t: number): void } {
+export interface EndCardColors {
+  /** Background (default theme ink). */ bg?: string;
+  /** Product name. */ name?: string;
+  /** Tagline text; keep ≥ 4.5:1 against bg. */ tagline?: string;
+  /** |accent| words in the tagline. */ accent?: string;
+  logoBg?: string; logoFg?: string;
+  /** CSS border-radius of the logo tile, e.g. "30px 30px 30px 5px". */ logoRadius?: string;
+}
+
+/**
+ * End card: logo springs in, the name types in by character, the tagline by word; a slow push-in.
+ * Returns the card element (append extra layers to it) and render(t). Colours via `colors` or theme tokens.
+ */
+export function endCard(layer: HTMLElement, o: { logo: string; name: string; tagline: string; at: { logo: number; name: number; tag: number }; pushFrom: number; pushDur: number; colors?: EndCardColors }): { el: HTMLElement; render(t: number): void } {
   ensureStyle("end-card", END_CSS);
   const el = document.createElement("div"); el.className = "dolly-end";
   el.innerHTML = `<div class="logo"></div><h2 class="name"></h2><p class="tag"></p>`;
+  const c = o.colors ?? {};
+  for (const [k, v] of Object.entries({ "--end-bg": c.bg, "--end-name": c.name, "--end-tagline": c.tagline, "--end-accent": c.accent, "--end-logo-bg": c.logoBg, "--end-logo-fg": c.logoFg, "--end-logo-radius": c.logoRadius })) if (v) el.style.setProperty(k, v);
   layer.append(el);
   const logo = el.querySelector<HTMLElement>(".logo")!, name = el.querySelector<HTMLElement>(".name")!, tag = el.querySelector<HTMLElement>(".tag")!;
   logo.textContent = o.logo;

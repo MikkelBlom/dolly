@@ -49,7 +49,7 @@ interface Sample {
   t: number;
   motion: number;
   cameraMotion: number;
-  elements: Array<{ key: string; group: string; scene: string | null; text?: string; opacity: number; shown: number; transient?: boolean; rect: { x: number; y: number; w: number; h: number }; fontSize?: number; color?: string; background?: string }>;
+  elements: Array<{ key: string; group: string; scene: string | null; text?: string; opacity: number; shown: number; transient?: boolean; decor?: boolean; rect: { x: number; y: number; w: number; h: number }; fontSize?: number; color?: string; background?: string }>;
 }
 
 export interface LintResult { ok: boolean; errors: number; warnings: number; infos: number; samples: number; findings: Finding[] }
@@ -79,7 +79,7 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
   const blocks = new Map<string, Block>();
   for (const smp of samples) {
     const byKey = new Map<string, Sample["elements"]>();
-    for (const e of smp.elements) if (e.text && !e.transient) byKey.set(e.key, [...(byKey.get(e.key) ?? []), e]);
+    for (const e of smp.elements) if (e.text && !e.transient && !e.decor) byKey.set(e.key, [...(byKey.get(e.key) ?? []), e]);
     for (const [elKey, units] of byKey) {
       const text = units.map(u => u.text).join(units.length > 1 && units.every(u => u.text!.length > 1) ? " " : "");
       // a block is one text state of one element: a label that changes value is a new block
@@ -161,9 +161,10 @@ export async function lint(s: Session, o: LintOptions = {}): Promise<LintResult>
     const entered = new Map<number, Set<string>>();
     const seen = new Set<string>();
     samples.forEach((smp, i) => {
-      const vis = new Set(smp.elements.filter(e => e.opacity > 0.05 && onScreen(e.rect, W, H) > 0.2).map(e => e.key));
-      if (i === 0) { vis.forEach(k2 => seen.add(k2)); return; }
-      for (const k2 of vis) if (!seen.has(k2)) { seen.add(k2); entered.set(i, (entered.get(i) ?? new Set()).add(k2)); }
+      // an entrance is an element becoming visible; elements the camera brings into frame were visible already
+      const vis = smp.elements.filter(e => e.opacity > 0.05 && !e.decor);
+      if (i === 0) { vis.forEach(e => seen.add(e.key)); return; }
+      for (const e of vis) if (!seen.has(e.key)) { seen.add(e.key); if (onScreen(e.rect, W, H) > 0.2) entered.set(i, (entered.get(i) ?? new Set()).add(e.key)); }
     });
     const max = thr("simultaneous-entrances", 2);
     for (const [i, all] of entered) {

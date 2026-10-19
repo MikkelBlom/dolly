@@ -76,10 +76,10 @@ export const theme = defineTheme({
     // open on a close-up of the hero card, then pull back to reveal the headline beside it
     if (i === 0) camKeys.push(`.at(0, { x: ${x - W / 2 + card.x + card.w / 2}, y: ${card.y + card.h / 2}, zoom: 1.8 }).pullBack(0.3, 1.6, { x: ${x}, y: ${H / 2}, zoom: 1 })`);
     else camKeys.push(`.whip(${(sc.start - 0.3).toFixed(2)}, ${(sc.start + 0.3).toFixed(2)}, { x: ${x} })`);
-    const nextMove = hasEnd && i === last - 1 ? endStart - 0.8 : (timeline[i + 1]?.start ?? sc.end) - 0.3;
+    const nextMove = hasEnd && i === last - 1 ? endStart - 0.9 : (timeline[i + 1]?.start ?? sc.end) - 0.3;
     camKeys.push(`.push(${(i === 0 ? 1.6 : sc.start + 0.3).toFixed(2)}, ${nextMove.toFixed(2)}, 0.05)`);
     // the last content scene ends by diving into its dark badge until the fill is the end card's background
-    if (hasEnd && i === last - 1) { const [bx, by] = badgeCentre(i); camKeys.push(`.move(${(endStart - 0.8).toFixed(2)}, ${endStart.toFixed(2)}, { x: ${bx}, y: ${by}, zoom: 28 }, "expoIn")`); }
+    if (hasEnd && i === last - 1) { const [bx, by] = badgeCentre(i); camKeys.push(`.zoomInto(${(endStart - 0.9).toFixed(2)}, ${endStart.toFixed(2)}, [${bx}, ${by}], 40)`); }
   });
   const imports = sb.scenes.map((s, i) => `import ${ident(s.name)} from "./scenes/${s.name}.ts";`).join("\n");
   write("video.ts", `
@@ -166,10 +166,10 @@ export default defineScene({
     card.append(chip);
     ctx.world.append(card);
   },
-  render({ t, start, end }) {
-    typeIn(head, t, start + 0.55, end - 0.9, { stagger: 0.07 });
-    flyIn(card, t, start + 0.75, { dx: 260, dy: 80, extra: \`translateY(\${bob(t, ${i}) * clamp(t - start - 1.5)}px)\` });
-    popIn(chip, t, start + 1.5);
+  render({ t }) {
+    typeIn(head, t, HEAD_IN, HEAD_OUT, { stagger: 0.07 });
+    flyIn(card, t, CARD_IN, { dx: 260, dy: 80, extra: \`translateY(\${bob(t, ${i}) * clamp(t - CARD_IN - 1.2)}px)\` });
+    popIn(chip, t, CARD_IN + 0.8);
   },
 });
 `);

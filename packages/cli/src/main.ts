@@ -1,6 +1,7 @@
 // dolly CLI. Agent-first: every command takes --json and then prints exactly one JSON object on stdout
 // (progress goes to stderr); image-producing commands print the paths of the images; exit codes mean
 // something; errors name the scene, element and time.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs, num, list, size, UsageError, type Parsed } from "./args.ts";
@@ -90,8 +91,13 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
     const { stills } = await import("@dolly/render");
     const s = await session(a, { workers: Math.min(times.length, num(a.flags.workers, 4)!) });
     try {
-      const r = await stills(s, { times, outDir: outDir(a, s.build.dir, "stills"), blur: !!a.flags.blur });
-      out(!!a.flags.json, { ok: true, stills: r }, () => r.map(x => `${x.t.toFixed(2)} s  ${x.scene.padEnd(14)} ${x.path}`).join("\n"));
+      const r = await stills(s, { times, outDir: outDir(a, s.build.dir, "stills"), blur: !!a.flags.blur, inspect: !!a.flags.inspect });
+      // console.log output from scenes, so values can be checked from the CLI
+      const logs = s.workers.flatMap(w => w.drainLogs());
+      out(!!a.flags.json, { ok: true, stills: r, logs }, () => [
+        ...r.map(x => `${x.t.toFixed(2)} s  ${x.scene.padEnd(14)} ${x.path}${x.inspect ? `\n${JSON.stringify(x.inspect, null, 1)}` : ""}`),
+        ...logs.map(l => `console ${l}`),
+      ].join("\n"));
     } catch (e) { throw new CliError(EXIT.render, (e as Error).message); } finally { s.close(); }
     return EXIT.ok;
   },
@@ -100,7 +106,9 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
     const { sheet } = await import("@dolly/render");
     const s = await session(a, { workers: num(a.flags.workers, 6) });
     try {
-      const file = typeof a.flags.out === "string" ? path.resolve(a.flags.out) : path.join(s.build.dir, "out", `sheet${a.flags.from !== undefined ? `-${a.flags.from}-${a.flags.to}` : ""}.png`);
+      // the default name changes with the content and the arguments, so re-reading never shows a stale sheet
+      const tag = crypto.createHash("sha1").update(JSON.stringify([s.build.globalHash, s.build.sceneHashes, a.flags])).digest("hex").slice(0, 8);
+      const file = typeof a.flags.out === "string" ? path.resolve(a.flags.out) : path.join(s.build.dir, "out", `sheet-${tag}.png`);
       const r = await sheet(s, { from: num(a.flags.from), to: num(a.flags.to), cols: num(a.flags.cols), rows: num(a.flags.rows), times: list(a.flags.times), out: file, blur: !!a.flags.blur, cellWidth: num(a.flags.cell) });
       out(!!a.flags.json, { ok: true, ...r }, () => `${r.path}\n${r.cells.map(c => `${c.t.toFixed(2)}s ${c.scene}`).join(" · ")}`);
     } catch (e) { throw new CliError(EXIT.render, (e as Error).message); } finally { s.close(); }
@@ -166,7 +174,9 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
       const r = await determinism(s, { times: list(a.flags.times), blur: !!a.flags.blur, outDir: outDir(a, s.build.dir, "determinism") });
       out(!!a.flags.json, r, () => [
         r.ok ? `deterministic: ${r.checked} frames match across render orders and workers` : "NOT deterministic: a scene carries state between frames",
-        ...r.mismatches.map(m => `${m.kind === "mismatch" ? "✗" : "~"} t=${m.t} (${m.scene}, ${m.samples}×) ${m.kind}: mean ${m.meanAbs}, ${m.changedPct} % of pixels > 16 levels · ${m.diffPath}`),
+        ...r.mismatches.filter(m => m.kind === "mismatch").map(m => [`✗ t=${m.t} (${m.scene}, ${m.samples}×): rendered state differs between two render orders · ${m.diffPath}`,
+          ...(m.differences ?? []).flatMap(d => [`    A: ${d.a}`, `    B: ${d.b}`])].join("\n")),
+        ...(r.mismatches.some(m => m.kind === "raster-noise") ? [`~ ${r.mismatches.filter(m => m.kind === "raster-noise").length} frames have identical state but faint anti-aliasing differences (Chromium raster noise; harmless)`] : []),
       ].join("\n"));
       return r.ok ? EXIT.ok : EXIT.determinism;
     } finally { s.close(); }
