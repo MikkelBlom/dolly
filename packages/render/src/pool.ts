@@ -25,6 +25,8 @@ export class Worker {
       const detail = await this.plain.evaluate<string | undefined>("window.__dollyError").catch(() => undefined);
       throw new Error(detail ? detail.split("\n")[0] : e.message);
     });
+    // transparent stage (alpha renders): screenshots keep the alpha channel
+    if (this.meta.background === "transparent") await this.plain.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });
     return this;
   }
 
@@ -33,7 +35,9 @@ export class Worker {
     this.hostOpening ??= (async () => {
       const p = await this.browser.newPage();
       const sep = this.q() ? "&" : "?";
-      await openScene(p, `${this.o.baseUrl}/host.html${this.q()}${sep}n=${this.o.nmax}`, this.o.width, this.o.height, "window.__host && window.__host.ready");
+      const alpha = this.meta.background === "transparent";
+      if (alpha) await p.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });
+      await openScene(p, `${this.o.baseUrl}/host.html${this.q()}${sep}n=${this.o.nmax}${alpha ? "&alpha=1" : ""}`, this.o.width, this.o.height, "window.__host && window.__host.ready");
       this.host = p;
       return p;
     })();

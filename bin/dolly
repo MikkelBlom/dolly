@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# dolly CLI shim for the Claude Code plugin: the plugin's bin/ is on the Bash tool's PATH.
+# Resolves the plugin root from this script's location and runs the launcher with Node 24.
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node "$DIR/scripts/run.mjs" "$@"

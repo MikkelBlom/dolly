@@ -11,6 +11,7 @@
 -->
 <style>
   html, body { margin: 0; background: #000; overflow: hidden; }
+  html.alpha, html.alpha body { background: transparent; }
   .g { position: absolute; inset: 0; isolation: isolate; }
   .h { position: absolute; inset: 0; opacity: .5; mix-blend-mode: plus-lighter; isolation: isolate; }
   .g.pass > .h:first-child { opacity: 1; }
@@ -22,6 +23,7 @@
   const params = new URLSearchParams(location.search);
   const NMAX = +(params.get("n") || 32);
   const src = "frame.html" + (params.get("aspect") ? "?aspect=" + params.get("aspect") : "");
+  if (params.get("alpha")) document.documentElement.classList.add("alpha");
   if (NMAX & (NMAX - 1)) throw new Error("n must be a power of two");
   const leaves = [];
   // levels[d] = groups at depth d (root = depth 0)

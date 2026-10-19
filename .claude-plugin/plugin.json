@@ -1,0 +1,16 @@
+{
+  "name": "dolly",
+  "version": "0.1.0",
+  "description": "Make motion-graphics promo videos from code: scene API, components, motion-grammar lint, contact sheets, fast parallel rendering with adaptive motion blur.",
+  "author": { "name": "Mikkel Blom", "url": "https://github.com/MikkelBlom" },
+  "homepage": "https://github.com/MikkelBlom/dolly",
+  "repository": "https://github.com/MikkelBlom/dolly",
+  "license": "Apache-2.0",
+  "keywords": ["video", "motion graphics", "promo", "render", "animation"],
+  "mcpServers": {
+    "dolly": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/run.mjs", "mcp"]
+    }
+  }
+}

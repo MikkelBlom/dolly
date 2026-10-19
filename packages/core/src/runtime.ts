@@ -101,7 +101,7 @@ export async function mount(input: VideoDef, opts: { aspect?: Aspect; assetBase?
 
   const style = document.createElement("style");
   style.textContent = `${themeCss(v.theme, opts.assetBase ?? "")}
-html,body{margin:0;overflow:hidden;background:#000}
+html,body{margin:0;overflow:hidden;background:${bg === "transparent" ? "transparent" : "#000"}}
 *{box-sizing:border-box}
 *,*::before,*::after{animation-play-state:paused!important;transition:none!important}
 #dolly-stage{position:absolute;left:0;top:0;width:${W}px;height:${H}px;overflow:hidden;transform-origin:0 0;background:${bg};color:var(--c-fg);font-family:var(--f-body)}

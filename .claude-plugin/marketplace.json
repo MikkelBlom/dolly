@@ -1,0 +1,16 @@
+{
+  "name": "dolly",
+  "description": "dolly: code-driven motion-graphics promo videos for Claude Code (skill, CLI, MCP).",
+  "owner": {
+    "name": "Mikkel Blom",
+    "url": "https://github.com/MikkelBlom"
+  },
+  "plugins": [
+    {
+      "name": "dolly",
+      "source": "./",
+      "description": "Code-driven motion-graphics videos for product promos, rendered fast. Skill + CLI + MCP.",
+      "version": "0.1.0"
+    }
+  ]
+}
