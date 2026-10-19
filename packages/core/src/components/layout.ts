@@ -45,7 +45,8 @@ export function parallaxGrid(layer: HTMLElement, o: GridOptions = {}): (cam: Cam
  */
 export function zoomInto(layer: HTMLElement, target: HTMLElement, t: number, t0: number, t1: number, o: { maxScale?: number; fadeText?: number; stage?: Viewport } = {}): { z: number; css: string; origin: string } {
   const z = prog(t, t0, t1 - t0);
-  if (z <= 0) return { z, css: "", origin: "" };
+  // reset what the zoom changes, so frames before it don't inherit a later frame's state
+  if (z <= 0) { target.style.color = ""; return { z, css: "", origin: "" }; }
   const W = o.stage?.width ?? 1280, H = o.stage?.height ?? 720;
   layer.style.transform = "none"; target.style.transform = "none";
   const [px, py] = stagePoint(target, 0.5, 0.5);
@@ -56,9 +57,9 @@ export function zoomInto(layer: HTMLElement, target: HTMLElement, t: number, t0:
 
 const LT_CSS = `
 .dolly-lt{position:absolute;display:flex;flex-direction:column;gap:6px}
-.dolly-lt .bar{position:absolute;left:-18px;top:6px;bottom:6px;width:5px;border-radius:3px;background:var(--c-accent);transform-origin:50% 0}
-.dolly-lt .t1{font:700 34px/1.1 var(--f-display);letter-spacing:-.02em;color:var(--c-fg)}
-.dolly-lt .t2{font:500 20px/1.3 var(--f-body);color:var(--c-muted)}`;
+.dolly-lt .bar{position:absolute;left:calc(var(--stage-h,720px)*-.025);top:6px;bottom:6px;width:calc(var(--stage-h,720px)*.007);border-radius:3px;background:var(--c-accent);transform-origin:50% 0}
+.dolly-lt .t1{font:700 calc(var(--stage-h,720px)*.047)/1.1 var(--f-display);letter-spacing:-.02em;color:var(--c-fg)}
+.dolly-lt .t2{font:500 calc(var(--stage-h,720px)*.028)/1.3 var(--f-body);color:var(--c-muted)}`;
 
 /** Lower third: an accent bar draws down, then title and subtitle rise in; leaves upwards. */
 export function lowerThird(layer: HTMLElement, o: { title: string; subtitle?: string; x?: number; y?: number }): (t: number, tin: number, tout?: number) => void {
@@ -80,9 +81,9 @@ export function lowerThird(layer: HTMLElement, o: { title: string; subtitle?: st
 
 const END_CSS = `
 .dolly-end{position:absolute;inset:0;background:var(--c-ink);color:#f3f4f7}
-.dolly-end .logo{position:absolute;left:50%;top:21%;font:700 64px/1.75 var(--f-ui,var(--f-body));padding:0 .42em;border-radius:30px 30px 30px 5px;background:#fff;color:var(--c-ink);transform-origin:50% 50%}
-.dolly-end .name{position:absolute;left:0;right:0;top:46%;text-align:center;margin:0;transform-origin:50% 0;font:800 116px/1 var(--f-display);letter-spacing:-.04em}
-.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;transform-origin:50% 0;font:500 34px var(--f-body);color:#a5abb8}
+.dolly-end .logo{position:absolute;left:50%;top:21%;font:700 calc(var(--stage-h,720px)*.0889)/1.75 var(--f-ui,var(--f-body));padding:0 .42em;border-radius:.47em .47em .47em .08em;background:#fff;color:var(--c-ink);transform-origin:50% 50%}
+.dolly-end .name{position:absolute;left:0;right:0;top:46%;text-align:center;margin:0;transform-origin:50% 0;font:800 calc(var(--stage-h,720px)*.161)/1 var(--f-display);letter-spacing:-.04em}
+.dolly-end .tag{position:absolute;left:0;right:0;top:66%;text-align:center;margin:0;transform-origin:50% 0;font:500 calc(var(--stage-h,720px)*.047) var(--f-body);color:#a5abb8}
 .dolly-end .tag .dolly-accent{color:var(--c-accent-soft,#8ea0ff)}`;
 
 /** End card: logo springs in, the name types in by character, the tagline by word; a slow push-in. */

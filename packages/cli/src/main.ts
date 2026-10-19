@@ -164,7 +164,10 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
     const s = await session(a, { workers: 2 });
     try {
       const r = await determinism(s, { times: list(a.flags.times), blur: !!a.flags.blur, outDir: outDir(a, s.build.dir, "determinism") });
-      out(!!a.flags.json, r, () => r.ok ? `deterministic: ${r.checked} frames identical across render orders and workers` : r.mismatches.map(m => `✗ t=${m.t} (${m.scene}, ${m.samples}×) differs: ${m.diffPath}`).join("\n"));
+      out(!!a.flags.json, r, () => [
+        r.ok ? `deterministic: ${r.checked} frames match across render orders and workers` : "NOT deterministic: a scene carries state between frames",
+        ...r.mismatches.map(m => `${m.kind === "mismatch" ? "✗" : "~"} t=${m.t} (${m.scene}, ${m.samples}×) ${m.kind}: mean ${m.meanAbs}, ${m.changedPct} % of pixels > 16 levels · ${m.diffPath}`),
+      ].join("\n"));
       return r.ok ? EXIT.ok : EXIT.determinism;
     } finally { s.close(); }
   },

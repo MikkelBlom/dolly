@@ -16,6 +16,8 @@ const BASE_FLAGS = [
   "--allow-file-access-from-files",
   // greyscale text AA everywhere: blended iframes (motion blur) never get LCD text, so plain frames must not either
   "--disable-lcd-text",
+  // never capture low-resolution or not-yet-decoded tiles: raster must finish before the screenshot
+  "--disable-low-res-tiling", "--disable-checker-imaging",
 ];
 
 /**
@@ -93,7 +95,9 @@ export async function launch(o: { gpu?: boolean; flags?: string[]; width?: numbe
   const port = portSeed++;
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "dolly-chrome-"));
   const args = [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, `--window-size=${o.width ?? 1920},${o.height ?? 1080}`,
-    ...BASE_FLAGS, ...(o.gpu === false ? [] : GPU_FLAGS), ...(o.flags ?? [])];
+    ...BASE_FLAGS, ...(o.gpu === false || process.env.DOLLY_GPU === "0" ? [] : GPU_FLAGS), ...(o.flags ?? []),
+    // extra flags for experiments, e.g. DOLLY_CHROME_FLAGS="--disable-distance-field-text"
+    ...(process.env.DOLLY_CHROME_FLAGS?.split(/\s+/).filter(Boolean) ?? [])];
   if (kind === "chrome") args.unshift("--headless=new");
   args.push("about:blank");
   const proc = spawn(exe, args, { stdio: "ignore" });

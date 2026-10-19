@@ -104,7 +104,7 @@ export async function mount(input: VideoDef, opts: { aspect?: Aspect; assetBase?
 html,body{margin:0;overflow:hidden;background:${bg === "transparent" ? "transparent" : "#000"}}
 *{box-sizing:border-box}
 *,*::before,*::after{animation-play-state:paused!important;transition:none!important}
-#dolly-stage{position:absolute;left:0;top:0;width:${W}px;height:${H}px;overflow:hidden;transform-origin:0 0;background:${bg};color:var(--c-fg);font-family:var(--f-body)}
+#dolly-stage{--stage-w:${W}px;--stage-h:${H}px;position:absolute;left:0;top:0;width:${W}px;height:${H}px;overflow:hidden;transform-origin:0 0;background:${bg};color:var(--c-fg);font-family:var(--f-body)}
 .dolly-layer{position:absolute;left:0;top:0;width:${W}px;height:${H}px}
 #dolly-world{transform-origin:0 0;z-index:10}
 #dolly-hud{z-index:20}

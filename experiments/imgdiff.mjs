@@ -25,6 +25,7 @@ if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, "/")}`) {
   if (heat) {
     const out = Buffer.alloc(a.length);
     for (let i = 0; i < a.length; i += 3) { const d = Math.min(255, (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) * 8); out[i] = d; out[i + 1] = d; out[i + 2] = d; }
-    spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "1920x1080", "-i", "-", heat], { input: out });
+    const size = spawnSync("ffprobe", ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", x], { encoding: "utf8" }).stdout.trim();
+    spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", size, "-i", "-", heat], { input: out });
   }
 }

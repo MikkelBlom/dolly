@@ -67,4 +67,12 @@ export async function openPage(s, url, { width = 1920, height = 1080 } = {}) {
   await s.evaluate("window.ready");
 }
 
-export const BASELINE = "file:///C:/Users/mikke/Desktop/Projects/KRW-Extension/store/video/promo-video.html?record";
+// The port follows the committed baseline (2a2b909). The working copy in the KRW repo may be edited by
+// other sessions, so experiments read the committed file (read-only git show) into experiments/out.
+import { execSync } from "node:child_process";
+const pinned = path.resolve("experiments/out/baseline-2a2b909.html");
+if (!fs.existsSync(pinned)) {
+  fs.mkdirSync(path.dirname(pinned), { recursive: true });
+  fs.writeFileSync(pinned, execSync("git -C C:/Users/mikke/Desktop/Projects/KRW-Extension show 2a2b909:store/video/promo-video.html"));
+}
+export const BASELINE = "file:///" + pinned.replace(/\\/g, "/") + "?record";

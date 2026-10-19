@@ -76,7 +76,13 @@ export async function bench(s: Session, o: { frames?: number; outDir: string }):
 export interface DeterminismResult {
   ok: boolean;
   checked: number;
-  mismatches: Array<{ t: number; samples: number; scene: string; a: string; b: string; diffPath?: string; meanAbs?: number }>;
+  /** Frames that differ: "mismatch" is a real state bug; "raster-noise" is sub-perceptual edge
+   * anti-aliasing from Chromium's render-history-dependent layer/raster caching (see WORKING_NOTES). */
+  mismatches: Array<{ t: number; samples: number; scene: string; a: string; b: string; diffPath?: string; meanAbs: number; changedPct: number; strongPct: number; kind: "mismatch" | "raster-noise" }>;
+}
+
+function decodeRgb(png: Buffer): Buffer {
+  return spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-i", "pipe:0", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { input: png, maxBuffer: 1 << 28 }).stdout;
 }
 
 /**
@@ -109,7 +115,14 @@ export async function determinism(s: Session, o: { times?: number[]; blur?: bool
     fs.writeFileSync(pa, A[i]); fs.writeFileSync(pb, B[i]);
     const diffPath = path.join(o.outDir, `det-${t}-diff.png`);
     spawnSync("ffmpeg", ["-hide_banner", "-loglevel", "error", "-y", "-i", pa, "-i", pb, "-filter_complex", "[0]format=rgb24[x];[1]format=rgb24[y];[x][y]blend=all_mode=difference,lutrgb=r=val*8:g=val*8:b=val*8", diffPath]);
-    mismatches.push({ t, samples: plan[i].length, scene: s.sceneAt(t), a: a.slice(0, 10), b: b.slice(0, 10), diffPath });
+    const x = decodeRgb(A[i]), y = decodeRgb(B[i]);
+    let sum = 0, changed = 0, strong = 0;
+    for (let k = 0; k < x.length; k++) { const d = Math.abs(x[k] - y[k]); sum += d; if (d > 16) changed++; if (d > 128) strong++; }
+    const meanAbs = sum / x.length, changedPct = (changed / x.length) * 100, strongPct = (strong / x.length) * 100;
+    // A state bug moves or recolours something: some pixels change by more than half the range. Raster
+    // noise is a faint anti-aliasing fringe on moving text (measured max ~98 levels, never > 128).
+    const kind = strongPct > 0.002 || meanAbs > 0.4 ? "mismatch" : "raster-noise";
+    mismatches.push({ t, samples: plan[i].length, scene: s.sceneAt(t), a: a.slice(0, 10), b: b.slice(0, 10), diffPath, meanAbs: +meanAbs.toFixed(3), changedPct: +changedPct.toFixed(3), strongPct: +strongPct.toFixed(4), kind });
   });
-  return { ok: !mismatches.length, checked: times.length, mismatches };
+  return { ok: !mismatches.some(m => m.kind === "mismatch"), checked: times.length, mismatches };
 }
