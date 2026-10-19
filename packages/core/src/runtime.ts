@@ -131,7 +131,9 @@ html,body{margin:0;overflow:hidden;background:#000}
     return k;
   };
   let scale = fit();
+  // a ResizeObserver also catches iframes resized by their parent, where no resize event may fire
   addEventListener("resize", () => { scale = fit(); });
+  new ResizeObserver(() => { scale = fit(); }).observe(document.documentElement);
 
   const camera = (t: number): CameraState => (v.camera ? v.camera(t) : IDENTITY(W, H));
   const markers = allMarkers(v);
@@ -267,7 +269,7 @@ html,body{margin:0;overflow:hidden;background:#000}
     for (const el of tracked()) {
       const r = visibleBox(el); if (!r) continue;
       const own = [...el.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent ?? "").join("").trim();
-      if (!own && !o.all) continue;
+      if (!own && !o.all && !(el as HTMLElement).dataset?.name) continue;
       let op = 1;
       for (let e: Element | null = el; e && e !== stage; e = e.parentElement) op *= +getComputedStyle(e).opacity;
       const cs = getComputedStyle(el);

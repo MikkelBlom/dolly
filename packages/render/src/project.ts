@@ -128,7 +128,7 @@ const MIME: Record<string, string> = {
 export interface Server { url: string; close(): void; routes: Map<string, (req: http.IncomingMessage, res: http.ServerResponse) => void> }
 
 /** Serve the build at / and the project directory at /project/. Extra routes can be added. */
-export function serve(build: { dir: string }, extraRoot?: Record<string, string>): Promise<Server> {
+export function serve(build: { dir: string }, extraRoot?: Record<string, string>, port = 0): Promise<Server> {
   const buildDir = path.join(build.dir, ".dolly", "build");
   const roots: Record<string, string> = { "/project/": build.dir, ...(extraRoot ?? {}), "/": buildDir };
   const routes = new Map<string, (req: http.IncomingMessage, res: http.ServerResponse) => void>();
@@ -143,7 +143,7 @@ export function serve(build: { dir: string }, extraRoot?: Record<string, string>
     res.setHeader("cache-control", "no-store");
     fs.createReadStream(file).pipe(res);
   });
-  return new Promise(resolve => server.listen(0, "127.0.0.1", () => {
+  return new Promise((resolve, reject) => server.once("error", reject).listen(port, "127.0.0.1", () => {
     const port = (server.address() as { port: number }).port;
     resolve({ url: `http://127.0.0.1:${port}`, close: () => server.close(), routes });
   }));
