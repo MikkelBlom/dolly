@@ -16,7 +16,7 @@
 | `player` (`dolly dev`) | Implemented | scrubber, markers, beat snap, loops, slow-mo, overlays (safe, thirds, bounds, camera, paths, velocity), audio lanes with drag, URL state, aspect switch, hot reload, `window.player` | 2026-10-19 | render | – |
 | CLI `dolly` | Implemented | new/info/still/sheet/draft/render/lint/diff/bench/dev/storyboard/doctor/mcp, `--json`, exit codes | 2026-10-19 | – | – |
 | MCP server | Implemented | inline images, render jobs, lint/info/new | 2026-10-19 | cli | – |
-| Claude Code plugin + marketplace | Implemented | skill + references, 3 slash-command skills, bin/ shim, launcher; `claude plugin validate --strict` passes | 2026-10-19 | – | Install test via marketplace not run (CLI not logged in) |
+| Claude Code plugin + marketplace | Implemented | skill + references, 3 slash-command skills, bin/ shim, launcher; `claude plugin validate --strict` passes | 2026-10-19 | – | – (installed and verified 2026-10-20) |
 | Price Peek port | Implemented | `examples/price-peek`, ≤ 0.83 levels mean error vs committed original | 2026-10-19 | – | – |
 | Golden-frame + determinism tests | Implemented | `packages/render/test` | 2026-10-19 | – | – |
 | Self-hosted fonts for Price Peek | Planned | uses Google Fonts CSS at render time | – | – | Mikkel's OK to download the OFL font files |

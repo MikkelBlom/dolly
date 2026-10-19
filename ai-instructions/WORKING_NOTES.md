@@ -24,7 +24,7 @@
 - Start-up is ~4–9 s for 12 browsers (fonts loaded per browser from Google Fonts for Price Peek). A persistent worker daemon (or `dolly dev` keeping a pool warm) would make stills/sheets near-instant.
 - Warm-cache renders still take ~17 s (browser start + PNG decode/re-encode of 1,800 frames). Skip starting workers when everything is cached.
 - Thermal soak test (≥ 3 min sustained, AC vs battery) not done; renders so far are < 1 min.
-- Plugin `bin/` on Windows Git Bash: shim written (`bin/dolly`, `bin/dolly.cmd`) but not verified through an actual marketplace install (the terminal `claude` CLI isn't logged in on this machine).
+- Plugin installed for Mikkel (2026-10-20, user scope, from the GitHub marketplace MikkelBlom/dolly): the installed copy's bin/dolly shim and MCP server both work. The install is pinned to a commit; after pushing changes run `claude plugin marketplace update dolly` and `claude plugin update dolly@dolly`.
 - The alpha (ProRes/WebM) path is implemented but has not been rendered and checked.
 
 ## Concerns
