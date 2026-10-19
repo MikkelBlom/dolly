@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { Session, runQueue, type SessionOptions } from "./session.ts";
-import { DEFAULT_BLUR, sampleCounts, shutterSeconds, subTimes, frameTime, type BlurSettings } from "./frames.ts";
+import { DEFAULT_BLUR, sampleCounts, shutterSeconds, smearVector, subTimes, frameTime, type BlurSettings, type MotionSample } from "./frames.ts";
 import { PRESETS, startEncoder, muxAudio, type Preset } from "./encode.ts";
 
 export interface RenderOptions extends SessionOptions {
@@ -42,7 +42,7 @@ export interface RenderResult {
     captureMsTotal: number;
   };
   cache: { hits: number; misses: number };
-  blur: null | { shutter: number; gap: number; nmax: number; samples: number; histogram: Record<string, number>; maxMotionPx: number; whipFrames: number[] };
+  blur: null | { shutter: number; gap: number; nmax: number; samples: number; histogram: Record<string, number>; maxMotionPx: number; cappedFrames: number; smearedFrames: number };
   throughput: { outputFps: number; subframesPerSec: number };
 }
 
@@ -67,26 +67,31 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
 
     // 1. plan: motion per frame → sample count
     let counts = new Array<number>(F).fill(1), planMs = 0, motion: number[] = [];
+    let plan: MotionSample[] = [];
+    let smears: Array<[number, number] | null> = new Array(F).fill(null);
     if (blur) {
       const a = performance.now();
       const half = shutterSeconds(fps, blur.shutter) / 2;
-      motion = new Array<number>(F).fill(0);
-      const planFile = path.join(cacheDir, "..", `plan-${s.build.globalHash.slice(0, 12)}-${hashScenes(s)}-${fps}-${s.width}x${s.height}-${blur.shutter}-${from}-${to}.json`);
-      if (useCache && fs.existsSync(planFile)) motion = JSON.parse(fs.readFileSync(planFile, "utf8"));
+      plan = new Array<MotionSample>(F);
+      const planFile = path.join(cacheDir, "..", `plan2-${s.build.globalHash.slice(0, 12)}-${hashScenes(s)}-${fps}-${s.width}x${s.height}-${blur.shutter}-${from}-${to}.json`);
+      if (useCache && fs.existsSync(planFile)) plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
       else {
         const chunks = chunked(F, 60);
         let done = 0;
         await runQueue(s.workers, chunks, async (w, [c0, c1]) => {
           for (let f = c0; f < c1; f++) {
             const t = frameTime(f, fps, from);
-            motion[f] = (await w.motion(Math.max(0, t - half), t + half)).px;
+            const m = await w.motion(Math.max(0, t - half), t + half);
+            plan[f] = { px: m.px, camera: m.camera, vx: m.cameraVec[0], vy: m.cameraVec[1] };
           }
           done += c1 - c0;
           o.onProgress?.({ stage: "plan", done, total: F, elapsedMs: performance.now() - t0 });
         });
-        fs.writeFileSync(planFile, JSON.stringify(motion));
+        fs.writeFileSync(planFile, JSON.stringify(plan));
       }
+      motion = plan.map(m => m.px);
       counts = sampleCounts(motion, blur);
+      smears = plan.map((m, f) => smearVector(m, counts[f], blur));
       planMs = performance.now() - a;
       if (counts.some(n => n > 1)) await Promise.all(s.workers.map(w => w.warmHost()));
     }
@@ -94,7 +99,7 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
     // 2. keys and cache hits
     const shutter = blur?.shutter ?? 0;
     const times = counts.map((n, f) => subTimes(f, n, fps, shutter || 180, from));
-    const keys = times.map((ts, f) => s.keyFor(frameTime(f, fps, from), ts, fps, shutter || 180));
+    const keys = times.map((ts, f) => s.keyFor(frameTime(f, fps, from), ts, fps, shutter || 180, smears[f]));
     const cached = keys.map(k => useCache && fs.existsSync(frameKeyCacheFile(cacheDir, k)));
     const todo = keys.map((_, f) => f).filter(f => !cached[f]);
 
@@ -127,7 +132,7 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
         while (f - nextWrite > WINDOW) await new Promise<void>(r => waiters.push(r));
         const a = performance.now();
         let png: Buffer;
-        try { png = await w.frame(times[f]); }
+        try { png = await w.frame(times[f], "png", smears[f]); }
         catch (e) { throw new Error(`frame ${f} (t=${frameTime(f, fps, from).toFixed(3)}s, scene ${s.sceneAt(frameTime(f, fps, from))}): ${(e as Error).message}`); }
         captureMs += performance.now() - a;
         if (useCache) { const file = frameKeyCacheFile(cacheDir, keys[f]); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.promises.writeFile(file, png).catch(() => {}); }
@@ -164,7 +169,7 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
       out, frames: F, fps, width: s.width, height: s.height, workers: s.workers.length, preset, wallMs,
       stages: { buildMs: s.timings.buildMs, startMs: s.timings.startMs, planMs, renderMs, encodeTailMs, muxMs, captureMsTotal: captureMs },
       cache: { hits: F - todo.length, misses: todo.length },
-      blur: blur ? { shutter: blur.shutter, gap: blur.gap, nmax: blur.nmax, samples: sub, histogram: hist, maxMotionPx: Math.max(0, ...motion), whipFrames: counts.map((n, f) => n >= blur.nmax ? f : -1).filter(f => f >= 0).slice(0, 400) } : null,
+      blur: blur ? { shutter: blur.shutter, gap: blur.gap, nmax: blur.nmax, samples: sub, histogram: hist, maxMotionPx: Math.max(0, ...motion), cappedFrames: counts.filter(n => n >= blur.nmax).length, smearedFrames: smears.filter(Boolean).length } : null,
       throughput: { outputFps: (todo.length || F) / (renderMs / 1000), subframesPerSec: todo.reduce((x, f) => x + counts[f], 0) / (renderMs / 1000) },
     };
   } finally {

@@ -8,3 +8,4 @@ export * from "./encode.ts";
 export * from "./session.ts";
 export * from "./render.ts";
 export * from "./stills.ts";
+export * from "./checks.ts";

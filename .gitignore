@@ -8,3 +8,4 @@ out/
 .env.*
 # Mikkel's private global instructions: kept locally, not published
 ai-instructions/GLOBAL_CLAUDE.md
+.dolly/

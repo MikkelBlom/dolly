@@ -1,16 +1,22 @@
 // Browser runtime: mounts a VideoDef into the page and exposes the frame contract on window.__dolly.
 // The renderer, the player and the linter only ever talk to a scene document through this object.
 import { activeScenes, allMarkers, withAspect, type Aspect, type SceneContext, type SceneDef, type SceneTime, type VideoDef } from "./video.ts";
-import { cameraDisplacement, cameraTransform, type CameraState } from "./camera.ts";
+import { cameraDisplacement, cameraTransform, screenToWorld, worldToScreen, type CameraState } from "./camera.ts";
 import { themeCss } from "./theme.ts";
 import { setStage } from "./dom.ts";
 import { rng, seedOf } from "./math.ts";
 
 export interface FrameElementInfo {
   name: string;
+  /** Text block this unit belongs to (masked words/characters share their heading's group). */
+  group: string;
+  /** Structural key of the group (child-index path), stable across workers. */
+  key: string;
   scene: string | null;
   rect: { x: number; y: number; w: number; h: number };
   opacity: number;
+  /** Fraction of the element visible inside its mask/clip parent (1 = fully shown). */
+  shown: number;
   text?: string;
   /** Rendered font size in stage px (includes transforms). */
   fontSize?: number;
@@ -45,7 +51,12 @@ export interface DollyApi {
   ready: Promise<DollyMeta>;
   render(t: number): void;
   /** Largest on-screen displacement (output px) of anything visible between t0 and t1. */
-  motion(t0: number, t1: number): { px: number; camera: number; element: string | null };
+  motion(t0: number, t1: number): { px: number; camera: number; cameraVec: [number, number]; element: string | null };
+  /**
+   * Blur the camera-moved world layer along (dx, dy) output px ("sample + smear": fills the gaps between
+   * motion-blur samples on fast camera moves). (0, 0) turns it off. Screen-space layers stay sharp.
+   */
+  setSmear(dx: number, dy: number): void;
   inspect(t: number, opts?: { all?: boolean }): InspectResult;
   /** Refit the stage to the window (called on resize). */
   fit(): number;
@@ -221,8 +232,18 @@ html,body{margin:0;overflow:hidden;background:#000}
         inside(r0.bottom, false) || inside(r1.bottom, false) ? Math.abs(r1.bottom - r0.bottom) : 0);
       if (d > px) { px = d; who = el; }
     }
-    const cam = cameraDisplacement(camera(t0), camera(t1), v.stage) * scale;
-    return { px: Math.max(px, cam), camera: cam, element: who ? describe(who) : null };
+    const c0 = camera(t0), c1 = camera(t1);
+    const cam = cameraDisplacement(c0, c1, v.stage) * scale;
+    // screen motion of the world point under the screen centre: the pan direction
+    const p = worldToScreen(c1, v.stage, [c0.x, c0.y]);
+    const cameraVec: [number, number] = [(p[0] - W / 2) * scale, (p[1] - H / 2) * scale];
+    return { px: Math.max(px, cam), camera: cam, cameraVec, element: who ? describe(who) : null };
+  };
+
+  const pathKey = (el: Element): string => {
+    const idx: number[] = [];
+    for (let e: Element | null = el; e && e !== stage; e = e.parentElement) idx.unshift(e.parentElement ? [...e.parentElement.children].indexOf(e) : 0);
+    return idx.join(".");
   };
 
   const describe = (el: Element): string => {
@@ -256,8 +277,17 @@ html,body{margin:0;overflow:hidden;background:#000}
       }
       const he = el as HTMLElement;
       const ratio = he.offsetHeight ? r.height / he.offsetHeight : scale;
+      // masked units: how much of the unit is inside its clip box (0 while it is still rising in)
+      let shown = 1, group = describe(el), key = pathKey(el);
+      if (el.classList.contains("dolly-wi") && el.parentElement) {
+        const m = el.parentElement.getBoundingClientRect();
+        const ix = Math.max(0, Math.min(r.right, m.right) - Math.max(r.left, m.left)), iy = Math.max(0, Math.min(r.bottom, m.bottom) - Math.max(r.top, m.top));
+        shown = r.width * r.height ? (ix * iy) / (r.width * r.height) : 0;
+        group = describe(el.parentElement.parentElement ?? el);
+        key = pathKey(el.parentElement.parentElement ?? el);
+      }
       out.push({
-        name: describe(el), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
+        name: describe(el), group, key, shown: +shown.toFixed(3), scene: (el.closest(".dolly-c") as HTMLElement | null)?.dataset.scene ?? null,
         rect: { x: (r.left - st.left) / scale, y: (r.top - st.top) / scale, w: r.width / scale, h: r.height / scale },
         opacity: +op.toFixed(3),
         ...(own ? { text: own, fontSize: +(parseFloat(cs.fontSize) * ratio / scale).toFixed(2), color: cs.color, background: bgc ?? bg } : {}),
@@ -266,7 +296,38 @@ html,body{margin:0;overflow:hidden;background:#000}
     return { t, camera: camera(t), scenes: activeScenes(v, t).map(s => s.name), elements: out };
   };
 
-  const api: DollyApi = { version: 1, meta, ready: null as unknown as Promise<DollyMeta>, render, motion, inspect, fit: () => (scale = fit()) };
+  // Smear: an SVG Gaussian blur on the world layer. The filter runs in the layer's own (world) units,
+  // which the camera scales by zoom × stage scale, so the screen-space length is divided by both.
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", "0"); svg.setAttribute("height", "0"); svg.style.position = "absolute";
+  const filter = document.createElementNS(NS, "filter");
+  filter.id = "dolly-smear";
+  // user-space region set per frame to what the camera sees: the world extends far beyond the layer's own
+  // box (an objectBoundingBox region clips everything the camera has travelled to), and a huge fixed
+  // region makes Chromium drop the layer altogether
+  for (const [k, val] of [["filterUnits", "userSpaceOnUse"], ["color-interpolation-filters", "sRGB"]]) filter.setAttribute(k, val);
+  const blurEl = document.createElementNS(NS, "feGaussianBlur");
+  blurEl.setAttribute("stdDeviation", "0 0");
+  filter.append(blurEl); svg.append(filter); document.body.append(svg);
+  let smear: [number, number] = [0, 0], lastT = 0;
+  const applySmear = (t: number) => {
+    if (!smear[0] && !smear[1]) { if (world.style.filter) world.style.filter = ""; return; }
+    // a box of length g has the variance of a Gaussian with sigma = g / sqrt(12)
+    const c = camera(t), z = c.zoom * scale;
+    const corners = [[0, 0], [W, 0], [0, H], [W, H]].map(p => screenToWorld(c, v.stage, p as [number, number]));
+    const xs = corners.map(p => p[0]), ys = corners.map(p => p[1]);
+    const mx = (Math.max(...xs) - Math.min(...xs)) * 0.1, my = (Math.max(...ys) - Math.min(...ys)) * 0.1;
+    filter.setAttribute("x", String(Math.min(...xs) - mx)); filter.setAttribute("y", String(Math.min(...ys) - my));
+    filter.setAttribute("width", String(Math.max(...xs) - Math.min(...xs) + 2 * mx)); filter.setAttribute("height", String(Math.max(...ys) - Math.min(...ys) + 2 * my));
+    blurEl.setAttribute("stdDeviation", `${(Math.abs(smear[0]) / Math.sqrt(12) / z).toFixed(3)} ${(Math.abs(smear[1]) / Math.sqrt(12) / z).toFixed(3)}`);
+    world.style.filter = "url(#dolly-smear)";
+  };
+  const renderAt = (t: number) => { lastT = t; render(t); applySmear(t); };
+  const api: DollyApi = {
+    version: 1, meta, ready: null as unknown as Promise<DollyMeta>, render: renderAt, motion, inspect, fit: () => (scale = fit()),
+    setSmear: (dx: number, dy: number) => { smear = [dx, dy]; applySmear(lastT); },
+  };
   window.__dolly = api;
 
   api.ready = (async () => {

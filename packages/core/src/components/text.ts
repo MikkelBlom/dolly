@@ -5,7 +5,7 @@ import { prog } from "../math.ts";
 
 const CSS = `
 .dolly-wm{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .02em .14em;margin:0 -.02em -.14em}
-.dolly-wi{display:inline-block;will-change:transform}
+.dolly-wi{display:inline-block}
 .dolly-accent{color:var(--c-accent)}`;
 
 export interface MaskedOptions {

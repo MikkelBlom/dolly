@@ -7,13 +7,15 @@ import path from "node:path";
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /** GPU raster on the discrete GPU via ANGLE/D3D11: measured 1.3× faster than SwiftShader at 12 workers. */
-export const GPU_FLAGS = ["--enable-gpu-rasterization", "--ignore-gpu-blocklist", "--use-angle=d3d11"];
+export const GPU_FLAGS = ["--enable-gpu-rasterization", "--ignore-gpu-blocklist", "--use-angle=d3d11", "--force-gpu-mem-available-mb=12000"];
 
 const BASE_FLAGS = [
   "--hide-scrollbars", "--force-color-profile=srgb", "--no-first-run", "--no-default-browser-check", "--mute-audio",
   "--disable-background-timer-throttling", "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding",
   "--disable-features=UseEcoQoSForBackgroundProcess,CalculateNativeWinOcclusion", "--disable-extensions", "--font-render-hinting=none",
   "--allow-file-access-from-files",
+  // greyscale text AA everywhere: blended iframes (motion blur) never get LCD text, so plain frames must not either
+  "--disable-lcd-text",
 ];
 
 /**

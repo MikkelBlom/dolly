@@ -95,3 +95,29 @@ Camera only (element motion ignored, so a lower bound), 180° shutter, 1080p60, 
 | 1.5 | 129.8 px | 1.80 | 3,239 | 1645 / 51 / 35 / 39 / 30 |
 | 4 | 129.8 px | 1.33 | 2,388 | 1681 / 63 / 37 / 12 / 7 |
 Baseline: fixed 6 → 10,800 sub-frames.
+
+## Iteration 1: first full pipeline on the Price Peek port (2026-10-19)
+
+12 workers (headless-shell 151, GPU raster, one browser each), PNG capture, compositor-tree blur (gap 1.5 px, Nmax 32, 180° shutter), NVENC `youtube` preset (`h264_nvenc p7 hq`, CQ 16). Commands: `node experiments/try-render.ts draft|final`.
+
+| Render | Wall | Start-up (12 browsers) | Plan | Render + encode | Output fps | Sub-frames/s | vs baseline (20 min) |
+|---|---|---|---|---|---|---|---|
+| Draft 960×540, 30 fps, no blur, NVENC p1 | **11.0 s** | 5.2 s | – | 5.7 s | 159 | 159 | 109× |
+| Final 1080p60, adaptive blur, no cache | **48.9 s** | 4.4 s | 1.6 s | 38.7 s | 46.5 | 375 | 24.5× |
+| Final, warm cache (1,800 hits) | 16.7 s | ~5 s | cached | 6.9 s (read + encode) | – | – | – |
+| Final after editing one scene (`end`, 280 frames re-rendered) | 22.2 s | ~5 s | cached | 9.9 s | – | – | – |
+
+Adaptive sample histogram (frames by N): 1: 774 · 2: 124 · 4: 151 · 8: 280 · 16: 277 · 32: 194. Total 14,506 sub-frames (baseline: 10,800 fixed). Max motion 129.8 px per shutter (the whip). 11 frames get the camera smear.
+
+**Corrections found while measuring** (earlier numbers in this iteration were wrong and are not reported):
+- With 32 full-HD documents per host, Chromium's default GPU tile budget silently dropped layers on heavy-blur frames: content vanished and renders looked *faster* (44.7 s). Fixed with `--force-gpu-mem-available-mb=12000`.
+- `will-change: transform` on masked text made text sharpness depend on render history (layers keep the raster scale of their first paint). Fixed (removed) and now a lint error.
+
+Blur accuracy after the fixes (`node experiments/verify-blur.ts`): compositor 32-sample frame vs 32 separate captures averaged in float:
+| t | mean abs | max | > 4 levels |
+|---|---|---|---|
+| 6.98 (whip) | 0.80 | 4 | 0.03 % |
+| 19.3 (dolly) | 0.65 | 4 | 0.005 % |
+A host sample at N=1 is bit-identical to the plain page.
+
+Port fidelity vs the original page (`node experiments/compare-baseline.ts`, 18 times, no blur): mean abs error 0–0.70 levels per frame; the remaining differences are the background dot grid's phase (generalised parallax maths) and text anti-aliasing.

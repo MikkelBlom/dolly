@@ -50,11 +50,16 @@
     ready: Promise.all(leaves.map(f => new Promise(r => f.addEventListener("load", r, { once: true }))))
       .then(() => Promise.all(leaves.map(f => f.contentWindow.__dollyMount))),
     /** Render one output frame from explicit sub-frame times (computed by Node on an integer grid). */
-    frame(times) {
+    frame(times, smear) {
       const n = times.length;
       if (n & (n - 1) || n > NMAX) throw new Error("sample count must be a power of two ≤ " + NMAX);
       use(n);
-      for (let i = 0; i < n; i++) leaves[i].contentWindow.__dolly.render(times[i]);
+      const [dx, dy] = smear || [0, 0];
+      for (let i = 0; i < n; i++) {
+        const d = leaves[i].contentWindow.__dolly;
+        d.setSmear(dx, dy);
+        d.render(times[i]);
+      }
     },
   };
 </script>

@@ -44,17 +44,17 @@ export class Worker {
   async warmHost(): Promise<void> { await this.hostPage(); }
 
   /** One output frame from explicit sub-frame times (1 time = no blur). */
-  async frame(times: number[], format: "png" | "jpeg" = "png"): Promise<Buffer> {
+  async frame(times: number[], format: "png" | "jpeg" = "png", smear: [number, number] | null = null): Promise<Buffer> {
     if (times.length === 1) {
       await this.plain.evaluate(`__dolly.render(${times[0]})`);
       return screenshot(this.plain, format);
     }
     const h = await this.hostPage();
-    await h.evaluate(`__host.frame(${JSON.stringify(times)})`);
+    await h.evaluate(`__host.frame(${JSON.stringify(times)}, ${JSON.stringify(smear)})`);
     return screenshot(h, format);
   }
 
-  motion(t0: number, t1: number): Promise<{ px: number; camera: number; element: string | null }> {
+  motion(t0: number, t1: number): Promise<{ px: number; camera: number; cameraVec: [number, number]; element: string | null }> {
     return this.plain.evaluate(`__dolly.motion(${t0}, ${t1})`);
   }
 

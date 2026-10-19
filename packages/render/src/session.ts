@@ -63,9 +63,9 @@ export class Session {
     return this.scenes.filter(s => t1 >= s.start && t0 < s.end).map(s => (s.file && this.build.sceneHashes[s.file]) || `inline:${s.name}`);
   }
 
-  keyFor(t: number, times: number[], fps: number, shutter: number): string {
+  keyFor(t: number, times: number[], fps: number, shutter: number, smear?: [number, number] | null): string {
     const half = shutterSeconds(fps, shutter) / 2;
-    return frameKey({ globalHash: this.build.globalHash, sceneHashes: this.activeHashes(t - half, t + half), t, times, width: this.width, height: this.height, aspect: this.o.aspect });
+    return frameKey({ globalHash: this.build.globalHash, sceneHashes: this.activeHashes(t - half, t + half), t, times, width: this.width, height: this.height, aspect: this.o.aspect, smear });
   }
 
   /** Scene name(s) at t, for error messages and labels. */
