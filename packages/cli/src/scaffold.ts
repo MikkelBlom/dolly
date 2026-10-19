@@ -63,13 +63,23 @@ export const theme = defineTheme({
 `);
   // regions: each content scene gets a region of the world, left to right; the camera whips between them
   const regionX = (i: number) => W / 2 + i * W * 1.6;
+  const wide = aspect === "16:9";
+  // hero card and its badge, in world coordinates relative to a region's left edge
+  const card = { x: Math.round(W * (wide ? 0.56 : 0.33)), y: Math.round(H * (wide ? 0.27 : 0.5)), w: Math.round(W * 0.34), h: Math.round(H * 0.42) };
+  const badgeCentre = (i: number) => [regionX(i) - W / 2 + card.x + 24 + 28, card.y - 14 + 16];
+  const hasEnd = sb.scenes.length > 1;
+  const endStart = hasEnd ? timeline[last].start : total;
   const camKeys: string[] = [];
   timeline.forEach((sc, i) => {
-    if (i === last) return;
+    if (hasEnd && i === last) return;
     const x = regionX(i);
-    if (i === 0) camKeys.push(`.at(0, { x: ${x}, y: ${H / 2}, zoom: 1.6 }).pullBack(0.3, 1.6, { zoom: 1 })`);
+    // open on a close-up of the hero card, then pull back to reveal the headline beside it
+    if (i === 0) camKeys.push(`.at(0, { x: ${x - W / 2 + card.x + card.w / 2}, y: ${card.y + card.h / 2}, zoom: 1.8 }).pullBack(0.3, 1.6, { x: ${x}, y: ${H / 2}, zoom: 1 })`);
     else camKeys.push(`.whip(${(sc.start - 0.3).toFixed(2)}, ${(sc.start + 0.3).toFixed(2)}, { x: ${x} })`);
-    camKeys.push(`.push(${(i === 0 ? 1.6 : sc.start + 0.3).toFixed(2)}, ${(Math.min(sc.end, timeline[i + 1]?.start ?? sc.end) - 0.3).toFixed(2)}, 0.05)`);
+    const nextMove = hasEnd && i === last - 1 ? endStart - 0.8 : (timeline[i + 1]?.start ?? sc.end) - 0.3;
+    camKeys.push(`.push(${(i === 0 ? 1.6 : sc.start + 0.3).toFixed(2)}, ${nextMove.toFixed(2)}, 0.05)`);
+    // the last content scene ends by diving into its dark badge until the fill is the end card's background
+    if (hasEnd && i === last - 1) { const [bx, by] = badgeCentre(i); camKeys.push(`.move(${(endStart - 0.8).toFixed(2)}, ${endStart.toFixed(2)}, { x: ${bx}, y: ${by}, zoom: 28 }, "expoIn")`); }
   });
   const imports = sb.scenes.map((s, i) => `import ${ident(s.name)} from "./scenes/${s.name}.ts";`).join("\n");
   write("video.ts", `
@@ -130,16 +140,19 @@ export default defineScene({
 import { defineScene, ensureStyle, flyIn, masked, popIn, badge, typeIn, bob, clamp } from "@dolly/core";
 
 const X = ${x}; // this scene's region in the world
+// headline enters once the camera has arrived and leaves before the next move
+const HEAD_IN = ${(i === 0 ? 1.7 : tl.start + 0.45).toFixed(2)}, HEAD_OUT = ${(hasEnd && i === last - 1 ? endStart - 1.3 : (timeline[i + 1]?.start ?? tl.end) - 0.6).toFixed(2)};
+const CARD_IN = ${(i === 0 ? 0.05 : tl.start + 0.35).toFixed(2)};
 let head: HTMLElement[], card: HTMLElement, chip: HTMLElement;
 
 export default defineScene({
   name: ${JSON.stringify(s.name)},
   start: ${Math.max(0, tl.start - 0.35).toFixed(2)},
-  end: ${(i + 1 < timeline.length ? timeline[i + 1].start + 0.35 : tl.end).toFixed(2)},
+  end: ${(hasEnd && i === last - 1 ? endStart + 0.05 : i + 1 < timeline.length ? timeline[i + 1].start + 0.35 : tl.end).toFixed(2)},
   setup(ctx) {
     ensureStyle("scene-${s.name}", \`
 .${s.name}-h{position:absolute;margin:0;font:800 ${aspect === "16:9" ? 72 : 84}px/1 var(--f-display);letter-spacing:-.035em;color:var(--c-fg)}
-.${s.name}-card{position:absolute;width:${Math.round(W * 0.34)}px;height:${Math.round(H * 0.42)}px;background:var(--c-surface);border-radius:var(--r-lg);box-shadow:var(--s-float)}\`);
+.${s.name}-card{position:absolute;width:${card.w}px;height:${card.h}px;background:var(--c-surface);border-radius:var(--r-lg);box-shadow:var(--s-float)}\`);
     const h = document.createElement("h2");
     h.className = "${s.name}-h";
     h.style.cssText = \`left:\${X + ${Math.round(W * 0.07)}}px;top:${Math.round(H * (aspect === "16:9" ? 0.3 : 0.18))}px;width:${Math.round(W * (aspect === "16:9" ? 0.42 : 0.8))}px\`;
