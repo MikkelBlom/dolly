@@ -2,6 +2,7 @@
 
 ## Decisions made (with reasons)
 - **2026-10-19, Mikkel:** build **from scratch** (beside HyperFrames/OpenFilm, not on Remotion/Revideo); name **dolly** (CLI `dolly`); **Apache-2.0**; **public** repo MikkelBlom/dolly. Apache-2.0 also makes borrowing HyperFrames (Apache-2.0) code straightforward, with attribution in NOTICE.
+- **2026-10-20, Mikkel: old global skill retired.** ~/.claude/skills/motion-promo-video is now a short redirect to dolly (the plugin skill, or skills/dolly/SKILL.md in this repo); the original is archived in ~/.claude/skills-archive/motion-promo-video/.
 - **GLOBAL_CLAUDE.md is git-ignored** because the repo is public; Mikkel's global rules are his private instructions.
 - **Capture = `Page.captureScreenshot` PNG on chrome-headless-shell, GPU flags, one browser per worker.** beginFrame works on Windows (shell 151) but gave no speed gain (117 vs 106 fps). Tabs in one browser serialise (1×8 = 38 fps vs 8×1 = 76).
 - **Default workers = ¾ of logical cores, max 16** (12 here; measured knee 12 → 107 fps, 16 → 113).
@@ -26,10 +27,9 @@
 - Root cause of the residual raster history noise (suspect layer squashing/assignment hysteresis). Worth a minimal repro for a Chromium bug if it matters.
 - Fully cached render is now ~7.5 s with no browser: what is left is PNG decode + NVENC p7 re-encode of 1,800 frames. Caching the encoded segment per frame range (or `-c copy` concat when nothing changed) would make it near-instant.
 - Thermal soak test (≥ 3 min sustained, AC vs battery) not done; renders so far are < 1 min.
-- Plugin `bin/` on Windows Git Bash: shim written (`bin/dolly`, `bin/dolly.cmd`) but not verified through an actual marketplace install (the terminal `claude` CLI isn't logged in on this machine).
+- Plugin installed for Mikkel (2026-10-20, user scope, from the GitHub marketplace MikkelBlom/dolly): the installed copy's bin/dolly shim and MCP server both work. The install is pinned to a commit; after pushing changes run `claude plugin marketplace update dolly` and `claude plugin update dolly@dolly`.
 - The alpha (ProRes/WebM) path is implemented but has not been rendered and checked.
 
 ## Concerns
 - Compositor accumulation relies on unspecified Chromium behaviour (blend precision of render surfaces). `experiments/verify-blur.ts` compares against a CPU float average; keep running it after Chromium updates.
 - `fontCss` (network fonts) makes renders depend on Google Fonts being reachable: **on 2026-10-20 fonts.gstatic.com reset connections for several minutes** (curl too) and every cold Price Peek command failed with `NetworkError` until it recovered. The daemon reduces exposure (fonts load once per browser) but does not remove it; self-host for Price Peek once Mikkel OKs downloading the font files.
-- Mikkel's existing global skill `~/.claude/skills/motion-promo-video` overlaps the plugin's `dolly` skill (both trigger on "make a promo video"). Needs his call: retire it, or point it at dolly.

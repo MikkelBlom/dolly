@@ -18,7 +18,7 @@
 | Warm daemon `dolly daemon` | Implemented | keeps a project's pool warm; CLI forwards still/sheet/lint/info/diff/render/draft automatically with identical output; rebuild + page reload on change; `--detach/--status/--stop/--idle` | 2026-10-20 | render | – |
 | Browserless fully cached render | Implemented | lazy session + cached scene metadata: no Chromium when plan and every frame are cached | 2026-10-20 | render | – |
 | MCP server | Implemented | inline images, render jobs, lint/info/new | 2026-10-19 | cli | – |
-| Claude Code plugin + marketplace | Implemented | skill + references, 3 slash-command skills, bin/ shim, launcher; `claude plugin validate --strict` passes | 2026-10-19 | – | Install test via marketplace not run (CLI not logged in) |
+| Claude Code plugin + marketplace | Implemented | skill + references, 3 slash-command skills, bin/ shim, launcher; `claude plugin validate --strict` passes | 2026-10-19 | – | – (installed and verified 2026-10-20) |
 | Price Peek port | Implemented | `examples/price-peek`, ≤ 0.83 levels mean error vs committed original | 2026-10-19 | – | – |
 | Golden-frame + determinism tests | Implemented | `packages/render/test` | 2026-10-19 | – | – |
 | Self-hosted fonts for Price Peek | Planned | uses Google Fonts CSS at render time | – | – | Mikkel's OK to download the OFL font files |
