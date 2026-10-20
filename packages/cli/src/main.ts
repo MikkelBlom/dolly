@@ -9,22 +9,34 @@ import { HELP, COMMAND_HELP } from "./help.ts";
 
 export const EXIT = { ok: 0, usage: 1, project: 2, render: 3, lint: 4, determinism: 5, environment: 6 } as const;
 
+/** Where command output goes. The daemon points these at the client's connection for each request. */
+export const io = {
+  out: (s: string): unknown => process.stdout.write(s),
+  err: (s: string): unknown => process.stderr.write(s),
+};
+
+/** Set inside `dolly daemon`: hands commands its warm session instead of starting browsers. */
+export const host: { session?: (o: import("@dolly/render").SessionOptions) => Promise<import("@dolly/render").Session> } = {};
+
+/** Commands that run in a warm daemon when one is running for the project (same code, same output). */
+const WARM = new Set(["info", "still", "sheet", "draft", "render", "lint", "diff"]);
+
 class CliError extends Error {
   code: number; detail?: Record<string, unknown>;
   constructor(code: number, message: string, detail?: Record<string, unknown>) { super(message); this.code = code; this.detail = detail; }
 }
 
 const out = (json: boolean, value: unknown, human: () => string) => {
-  if (json) process.stdout.write(JSON.stringify(value) + "\n");
-  else process.stdout.write(human() + "\n");
+  if (json) io.out(JSON.stringify(value) + "\n");
+  else io.out(human() + "\n");
 };
 
 const progress = (json: boolean, quiet: boolean) => (p: { stage: string; done: number; total: number; elapsedMs: number }) => {
   if (quiet) return;
   if (p.done % 30 && p.done !== p.total) return;
   const line = `${p.stage} ${p.done}/${p.total} · ${(p.elapsedMs / 1000).toFixed(1)} s`;
-  if (json) process.stderr.write(JSON.stringify({ progress: p }) + "\n");
-  else process.stderr.write(`\r${line}   `);
+  if (json) io.err(JSON.stringify({ progress: p }) + "\n");
+  else io.err(`\r${line}   `);
 };
 
 function projectArg(a: Parsed): string {
@@ -35,7 +47,8 @@ function projectArg(a: Parsed): string {
 async function session(a: Parsed, extra: Record<string, unknown> = {}) {
   const { Session } = await import("@dolly/render");
   try {
-    return await Session.open({ project: projectArg(a), workers: num(a.flags.workers), aspect: typeof a.flags.aspect === "string" ? a.flags.aspect : undefined, ...size(a.flags.size), ...extra });
+    const o = { project: projectArg(a), workers: num(a.flags.workers), aspect: typeof a.flags.aspect === "string" ? a.flags.aspect : undefined, ...size(a.flags.size), ...extra };
+    return await (host.session ? host.session(o) : Session.open(o));
   } catch (e) {
     throw new CliError(EXIT.project, (e as Error).message);
   }
@@ -44,7 +57,7 @@ async function session(a: Parsed, extra: Record<string, unknown> = {}) {
 const outDir = (a: Parsed, project: string, sub: string) => path.resolve(typeof a.flags.out === "string" ? a.flags.out : path.join(project, "out", sub));
 
 const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
-  async help(a) { process.stdout.write((a._[1] && COMMAND_HELP[a._[1]]) || HELP); return EXIT.ok; },
+  async help(a) { io.out((a._[1] && COMMAND_HELP[a._[1]]) || HELP); return EXIT.ok; },
 
   async doctor(a) {
     const { findBrowser, ffmpegAvailable } = await import("@dolly/render");
@@ -125,15 +138,18 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
     const blur = a.flags.blur === false ? false : { ...(num(a.flags.shutter) ? { shutter: num(a.flags.shutter)! } : {}), ...(num(a.flags.gap) ? { gap: num(a.flags.gap)! } : {}), ...(num(a.flags.nmax) ? { nmax: num(a.flags.nmax)! } : {}) };
     const project = projectArg(a);
     const isDraft = !!a.flags._draft;
+    const so = { project, workers: num(a.flags.workers), aspect: typeof a.flags.aspect === "string" ? a.flags.aspect : undefined, ...size(a.flags.size), nmax: num(a.flags.nmax) };
+    let warm: import("@dolly/render").Session | undefined;
     try {
+      warm = host.session ? await host.session({ ...so, lazy: a.flags.cache !== false }) : undefined;
       const r = await render({
-        project, workers: num(a.flags.workers), aspect: typeof a.flags.aspect === "string" ? a.flags.aspect : undefined, ...size(a.flags.size),
+        ...so, session: warm,
         fps: num(a.flags.fps), from: num(a.flags.from), to: num(a.flags.to), preset: (a.flags.preset as any) ?? "youtube", blur,
-        cache: a.flags.cache !== false, audio: a.flags.audio !== false, nmax: num(a.flags.nmax),
+        cache: a.flags.cache !== false, audio: a.flags.audio !== false,
         out: typeof a.flags.out === "string" ? path.resolve(a.flags.out) : isDraft ? path.join(project, "out", "draft.mp4") : undefined,
         onProgress: progress(json, !!a.flags.quiet),
       });
-      if (!json && !a.flags.quiet) process.stderr.write("\n");
+      if (!json && !a.flags.quiet) io.err("\n");
       out(json, { ok: true, ...r }, () => [
         `${r.out}`,
         `${r.frames} frames ${r.width}×${r.height}@${r.fps} · ${r.preset} · ${(r.wallMs / 1000).toFixed(1)} s wall (${r.throughput.outputFps.toFixed(1)} fps, ${r.workers} workers)`,
@@ -144,7 +160,12 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
       const m = (e as Error).message;
       const sc = m.match(/scene "([^"]+)" at t=([\d.]+)s/);
       throw new CliError(EXIT.render, m, sc ? { scene: sc[1], t: +sc[2] } : undefined);
-    }
+    } finally { warm?.close(); }
+  },
+
+  async daemon(a) {
+    const { daemonCommand } = await import("./daemon.ts");
+    return daemonCommand(a, projectArg(a));
   },
 
   async lint(a) {
@@ -197,7 +218,7 @@ const COMMANDS: Record<string, (a: Parsed) => Promise<number>> = {
   async storyboard(a) {
     const { validateStoryboard, storyboardSchema } = await import("@dolly/core");
     const sub = a._[1];
-    if (sub === "schema") { process.stdout.write(JSON.stringify(storyboardSchema, null, 2) + "\n"); return EXIT.ok; }
+    if (sub === "schema") { io.out(JSON.stringify(storyboardSchema, null, 2) + "\n"); return EXIT.ok; }
     if (sub !== "check" || !a._[2]) throw new UsageError("usage: dolly storyboard check <file.json> | dolly storyboard schema");
     let data: unknown;
     try { data = JSON.parse(fs.readFileSync(path.resolve(a._[2]), "utf8")); } catch (e) { throw new CliError(EXIT.project, `can't read ${a._[2]}: ${(e as Error).message}`); }
@@ -228,14 +249,23 @@ export async function main(argv: string[]): Promise<number> {
   if (a.flags.help) return COMMANDS.help({ ...a, _: ["help", cmd] });
   const fn = COMMANDS[cmd];
   const json = !!a.flags.json;
-  if (!fn) { process.stderr.write(`unknown command "${cmd}"\n\n${HELP}`); return EXIT.usage; }
+  if (!fn) { io.err(`unknown command "${cmd}"\n\n${HELP}`); return EXIT.usage; }
+  // a running `dolly daemon` for this project runs the command with warm browsers; --no-daemon or
+  // DOLLY_NO_DAEMON=1 opts out (the flag is dropped so it never changes output names)
+  const useDaemon = a.flags.daemon !== false && !process.env.DOLLY_NO_DAEMON;
+  delete a.flags.daemon;
+  if (WARM.has(cmd) && useDaemon && !host.session) {
+    const { forward } = await import("./daemon.ts");
+    const code = await forward(argv.filter(x => x !== "--no-daemon"), projectArg(a));
+    if (code !== null) return code;
+  }
   try { return await fn(a); }
   catch (e) {
     const code = e instanceof CliError ? e.code : e instanceof UsageError ? EXIT.usage : EXIT.render;
     const message = (e as Error).message;
-    if (json) process.stdout.write(JSON.stringify({ ok: false, error: { code, message, ...(e instanceof CliError ? e.detail : {}) } }) + "\n");
-    else process.stderr.write(`dolly ${cmd}: ${message}\n`);
-    if (process.env.DOLLY_DEBUG) process.stderr.write(String((e as Error).stack) + "\n");
+    if (json) io.out(JSON.stringify({ ok: false, error: { code, message, ...(e instanceof CliError ? e.detail : {}) } }) + "\n");
+    else io.err(`dolly ${cmd}: ${message}\n`);
+    if (process.env.DOLLY_DEBUG) io.err(String((e as Error).stack) + "\n");
     return code;
   }
 }

@@ -44,6 +44,8 @@ The renderer, the player and the linter only ever talk to scenes through this ob
 5. **Cache**: each frame's PNG is stored under a key of (renderer version, global hash, hashes of scenes active in its shutter interval, sample times, size, smear).
 6. **Encode**: frames stream in order through a bounded reorder buffer into one ffmpeg (NVENC presets, BT.709 tagging), then the optional audio mux (ducking, two-pass loudnorm to −14 LUFS).
 
+**Warm daemon** (`dolly daemon`, `packages/cli/src/daemon.ts`): one process per project keeps a session (bundle server + pool) open and runs the ordinary CLI commands in-process, streaming their stdout/stderr to the client as NDJSON, so output is byte-identical to a cold run. The CLI finds it through `<project>/.dolly/daemon.json` (port + token, loopback only) and falls back to starting browsers when there is none, it is stale, or the launch environment (`DOLLY_GPU`, `DOLLY_CHROME*`) differs; `--no-daemon` / `DOLLY_NO_DAEMON=1` opt out. Before each command `Session.refresh()` rebuilds (~40 ms) and reloads the workers' pages only if the bundle, aspect, size or blur-host size changed; a file watcher does the same in the background so the next command finds fresh pages. Commands run one at a time; a dead browser is replaced. **Fully cached renders** open a lazy session: scene metadata comes from `.dolly/cache/meta*-<hashes>.json` and no browser starts unless the plan or some frame is missing.
+
 ## Why these choices
 
 See `docs/research.md` (decisions with sources) and `docs/benchmarks.md` (every number). The non-obvious ones:

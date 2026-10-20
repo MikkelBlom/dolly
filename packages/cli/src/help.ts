@@ -13,6 +13,9 @@ export const HELP = `dolly: code-driven motion graphics, rendered fast. Agent-fi
   dolly lint [project] [--strict]    motion-grammar checks with timestamps (exit 4 on errors)
   dolly diff [project] [--blur]      determinism check: frames rendered twice in different orders
   dolly bench [project]              frames/s per stage (render, capture, plan, blur, encode)
+  dolly daemon [project] [--detach] [--idle 30] [--status] [--stop]
+                                     keep this project's browsers warm: still/sheet/lint/info/diff/
+                                     render then skip start-up (automatic; --no-daemon opts out)
   dolly dev [project] [--port 5173]  live player: scrubber, markers, loop, slow-mo, overlays
   dolly storyboard check <file>      validate a storyboard JSON; "schema" prints its JSON Schema
   dolly doctor                       check Node, Chromium, ffmpeg and encoders

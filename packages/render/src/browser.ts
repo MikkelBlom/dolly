@@ -88,23 +88,26 @@ export interface Browser {
   close(): void;
 }
 
-let portSeed = 9500 + Math.floor(Math.random() * 300);
-
 export async function launch(o: { gpu?: boolean; flags?: string[]; width?: number; height?: number } = {}): Promise<Browser> {
   const { exe, kind } = findBrowser();
-  const port = portSeed++;
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), "dolly-chrome-"));
-  const args = [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, `--window-size=${o.width ?? 1920},${o.height ?? 1080}`,
+  // port 0: Chromium picks a free port and writes it to DevToolsActivePort in the profile. A chosen port
+  // can collide with another dolly process's browser (a daemon holds 12), and the fetch below would then
+  // silently attach to that browser instead of ours.
+  const args = [`--remote-debugging-port=0`, `--user-data-dir=${profile}`, `--window-size=${o.width ?? 1920},${o.height ?? 1080}`,
     ...BASE_FLAGS, ...(o.gpu === false || process.env.DOLLY_GPU === "0" ? [] : GPU_FLAGS), ...(o.flags ?? []),
     // extra flags for experiments, e.g. DOLLY_CHROME_FLAGS="--disable-distance-field-text"
     ...(process.env.DOLLY_CHROME_FLAGS?.split(/\s+/).filter(Boolean) ?? [])];
   if (kind === "chrome") args.unshift("--headless=new");
   args.push("about:blank");
   const proc = spawn(exe, args, { stdio: "ignore" });
-  let version: any;
+  let version: any, port = 0;
   for (let i = 0; i < 150 && !version; i++) {
     await sleep(60);
-    try { version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json(); } catch { /* not up yet */ }
+    try {
+      port ||= +fs.readFileSync(path.join(profile, "DevToolsActivePort"), "utf8").split(/\r?\n/)[0];
+      if (port) version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json();
+    } catch { /* not up yet */ }
   }
   if (!version) { proc.kill(); throw new Error(`Chromium did not start (${exe})`); }
   const browserSession = await connect(version.webSocketDebuggerUrl);

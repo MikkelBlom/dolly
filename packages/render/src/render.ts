@@ -50,7 +50,8 @@ const frameKeyCacheFile = (dir: string, key: string) => path.join(dir, key.slice
 
 export async function render(o: RenderOptions): Promise<RenderResult> {
   const t0 = performance.now();
-  const s = o.session ?? await Session.open(o);
+  // lazy: when the plan and every frame are cached, no browser is started at all
+  const s = o.session ?? await Session.open({ ...o, lazy: o.cache !== false });
   try {
     const meta = s.meta;
     const fps = o.fps ?? meta.fps;
@@ -76,6 +77,7 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
       const planFile = path.join(cacheDir, "..", `plan2-${s.build.globalHash.slice(0, 12)}-${hashScenes(s)}-${fps}-${s.width}x${s.height}-${blur.shutter}-${from}-${to}.json`);
       if (useCache && fs.existsSync(planFile)) plan = JSON.parse(fs.readFileSync(planFile, "utf8"));
       else {
+        await s.ensureWorkers();
         const chunks = chunked(F, 60);
         let done = 0;
         await runQueue(s.workers, chunks, async (w, [c0, c1]) => {
@@ -93,7 +95,6 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
       counts = sampleCounts(motion, blur);
       smears = plan.map((m, f) => smearVector(m, counts[f], blur));
       planMs = performance.now() - a;
-      if (counts.some(n => n > 1)) await Promise.all(s.workers.map(w => w.warmHost()));
     }
 
     // 2. keys and cache hits
@@ -102,6 +103,10 @@ export async function render(o: RenderOptions): Promise<RenderResult> {
     const keys = times.map((ts, f) => s.keyFor(frameTime(f, fps, from), ts, fps, shutter || 180, smears[f]));
     const cached = keys.map(k => useCache && fs.existsSync(frameKeyCacheFile(cacheDir, k)));
     const todo = keys.map((_, f) => f).filter(f => !cached[f]);
+    if (todo.length) {
+      await s.ensureWorkers();
+      if (todo.some(f => counts[f] > 1)) await Promise.all(s.workers.map(w => w.warmHost()));
+    }
 
     // 3. render + encode, in order through a bounded reorder buffer
     const enc = startEncoder({ out, fps, preset, width: s.width, height: s.height });

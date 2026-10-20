@@ -28,13 +28,30 @@ export class Worker {
     this.plain.on("Runtime.consoleAPICalled", (p: any) => {
       if (this.logs.length < 500) this.logs.push(`${p.type}: ${(p.args ?? []).map((x: any) => x.value !== undefined ? (typeof x.value === "string" ? x.value : JSON.stringify(x.value)) : x.description ?? x.type).join(" ")}`);
     });
+    await this.load();
+    return this;
+  }
+
+  /**
+   * Reload this worker's scene page with new options (a rebuilt bundle, another size, aspect or blur
+   * host size) without restarting the browser. The accumulation host is closed and reopens on demand.
+   */
+  async reload(o: WorkerOptions): Promise<void> {
+    this.o = o;
+    const host = this.host ?? (this.hostOpening ? await this.hostOpening.catch(() => null) : null);
+    this.host = null; this.hostOpening = null;
+    if (host) { await host.send("Page.close").catch(() => {}); host.close(); }
+    await this.load();
+    this.logs = [];
+  }
+
+  private async load(): Promise<void> {
     this.meta = await openScene(this.plain, `${this.o.baseUrl}/frame.html${this.q()}`, this.o.width, this.o.height).catch(async e => {
       const detail = await this.plain.evaluate<string | undefined>("window.__dollyError").catch(() => undefined);
       throw new Error(detail ? detail.split("\n")[0] : e.message);
     });
     // transparent stage (alpha renders): screenshots keep the alpha channel
-    if (this.meta.background === "transparent") await this.plain.send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });
-    return this;
+    await this.plain.send("Emulation.setDefaultBackgroundColorOverride", this.meta.background === "transparent" ? { color: { r: 0, g: 0, b: 0, a: 0 } } : {});
   }
 
   private async hostPage(): Promise<CdpSession> {
@@ -80,6 +97,9 @@ export class Worker {
 
   /** A scratch tab in this worker's browser (contact-sheet composition, inspection). */
   newPage(): Promise<CdpSession> { return this.browser.newPage(); }
+
+  /** False once the browser process has exited (crashed or killed). */
+  get alive(): boolean { return !!this.browser && this.browser.proc.exitCode === null && !this.browser.proc.killed; }
 
   close(): void { this.browser?.close(); }
 }

@@ -148,3 +148,30 @@ Blur: 14,490 sub-frames (N: 1 → 774 frames, 2 → 124, 4 → 155, 8 → 276, 1
 Bottleneck: Chromium's PNG encode in capture (CPU). Encoding (133 fps) outruns capture, so it overlaps fully.
 
 Acceptance test (fresh agent, Snapnote, 15 s, from a one-paragraph brief, `examples/snapnote`): draft 6.2 s, final 1080p60 25.4 s, `sheet` ~3 s, `lint` ~3.6 s.
+
+## Iteration 3: warm daemon and browserless cached renders (2026-10-20)
+
+Same machine, `examples/price-peek` (12 workers, 1080p unless noted). Wall time of real CLI invocations from a fresh `node` process (what an agent pays per call), median of 3, measured with a small harness that spawns `node packages/cli/bin/dolly.ts <args> --json`. "Before" is the previous code (commit adeb05d, identical render code to this branch's base), run against the same project with its own cache. "Warm" = with `dolly daemon examples/price-peek --detach` running; the commands are unchanged (the CLI finds the daemon by itself).
+
+| Command | Before | After, cold (no daemon) | After, warm daemon | Speed-up (warm vs before) |
+|---|---|---|---|---|
+| `dolly info` | 2.14 s | 2.33 s | **0.17 s** | 12.6× |
+| `dolly still --times 2,7,14` | 2.42 s | 2.63 s | **0.27 s** | 9.0× |
+| `dolly still --times 2,7,14 --blur` (after the first, which opens the blur hosts: 1.71 s) | – | – | **0.32 s** | – |
+| `dolly sheet` (4×3) | 3.16 s | 3.57 s | **0.54 s** | 5.9× |
+| `dolly lint` | 4.58 s | 4.56 s | **1.62 s** | 2.8× |
+| `dolly render`, all 1,800 frames cached | 16.19 s | **7.49 s** (0 browsers) | 7.74 s | 2.2× |
+| `dolly draft`, all frames cached | 4.87 s | **1.07 s** (0 browsers) | 1.40 s | 4.6× |
+| `dolly draft --no-cache` | – | 10.17 s | **6.10 s** | 1.7× (vs cold) |
+
+- Daemon start-up (`dolly daemon … --detach`, returns when serving): 4.5–6.3 s, paid once; it stops after 30 idle minutes.
+- After the source changes, the first warm command includes a rebuild (~40 ms) and a page reload of all 12 workers: `info` right after editing a scene 0.53 s; `still` after recovering from a scene that threw at load 0.51 s. Switching output size (sheet at 1080p right after a 960×540 draft) costs a reload: sheet 0.73–0.82 s instead of 0.54 s.
+- Two clients at once are queued: `sheet` + `still` started together finish in 0.85 s.
+- The cold path is unchanged within noise: an interleaved A/B of `sheet` (old vs new code, 4 rounds) gave 3.19–3.41 s vs 3.36–3.75 s (the first round of each, 4.8/4.5 s, was a font-cache warm-up).
+- Fully cached render, what is left: 6.7 s of the 7.5 s is reading 1,800 cached PNGs and re-encoding them (PNG decode + NVENC p7); `startMs` 0, `workers` 0.
+
+**Output identity.** `--json` stdout is byte-identical cold vs warm for `info`, `still`, `sheet` and `lint`, and for build errors (syntax error) and load errors (a scene that throws). Pixels: 8 stills (with and without blur) cold vs warm differ by at most 1 level on 3–5 of 8 frames; two cold runs differ the same way (Chromium's known raster noise).
+
+**Bug found while measuring.** `launch()` picked debugging ports as `9500 + random(300)` per process. With a daemon holding 12 ports, a cold CLI run picked a taken port and *attached to the daemon's browser* via `/json/version` (its tabs showed up inside the daemon's Chromiums; the next warm blurred still hung). Now `--remote-debugging-port=0` and the port is read from `DevToolsActivePort`. The collision was possible before too, between any two concurrent dolly processes.
+
+**Environment note.** fonts.gstatic.com reset connections for several minutes during this session (curl too); every cold Price Peek command failed with `NetworkError` until it recovered. No numbers above come from that window.

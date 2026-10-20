@@ -1,7 +1,9 @@
 # Future ideas
 
 ## Rendering
-- **[High] Warm worker daemon**: keep a pool alive between CLI calls (or reuse `dolly dev`'s), so `still`/`sheet` drop from ~5 s to < 1 s. Biggest win for the agent loop.
+- **[Medium] `dolly dev` hosting the warm pool**: today `dolly daemon` is separate from the player; one process could serve both.
+- **[Medium] Daemon: skip page reloads for fully cached renders** (a cached `draft` reloads 12 pages at 960×540 it never uses, and the next sheet reloads them back).
+- **[Low] MCP server could start the daemon itself** on first use.
 - **[High] Skip browsers when the cache covers the render**: a fully cached final still pays ~5 s start-up.
 - **[High] Gamma-correct blur option** (`--blur linear`): CPU float accumulation of a few compositor groups, or HTML-in-Canvas when it gets fast. Compare on the whip.
 - **[Medium] Blur preview in the player**: show the accumulated frame when paused (one host iframe set in the player).

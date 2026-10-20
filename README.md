@@ -35,6 +35,7 @@ claude plugin marketplace add MikkelBlom/dolly && claude plugin install dolly@do
 
 ```bash
 dolly new my-video --title "My product"     # or --storyboard storyboard.json
+dolly daemon my-video --detach              # optional: keep browsers warm (sheet ~0.5 s instead of ~3.5 s)
 dolly sheet my-video                        # labelled contact sheet PNG
 dolly lint my-video                         # motion-grammar findings with timestamps
 dolly draft my-video                        # 960×540 pacing draft

@@ -15,6 +15,8 @@
 | `lint`: motion-grammar rules | Implemented | 13 rules, tuned against the approved Price Peek film | 2026-10-19 | render | – |
 | `player` (`dolly dev`) | Implemented | scrubber, markers, beat snap, loops, slow-mo, overlays (safe, thirds, bounds, camera, paths, velocity), audio lanes with drag, URL state, aspect switch, hot reload, `window.player` | 2026-10-19 | render | – |
 | CLI `dolly` | Implemented | new/info/still/sheet/draft/render/lint/diff/bench/dev/storyboard/doctor/mcp, `--json`, exit codes | 2026-10-19 | – | – |
+| Warm daemon `dolly daemon` | Implemented | keeps a project's pool warm; CLI forwards still/sheet/lint/info/diff/render/draft automatically with identical output; rebuild + page reload on change; `--detach/--status/--stop/--idle` | 2026-10-20 | render | – |
+| Browserless fully cached render | Implemented | lazy session + cached scene metadata: no Chromium when plan and every frame are cached | 2026-10-20 | render | – |
 | MCP server | Implemented | inline images, render jobs, lint/info/new | 2026-10-19 | cli | – |
 | Claude Code plugin + marketplace | Implemented | skill + references, 3 slash-command skills, bin/ shim, launcher; `claude plugin validate --strict` passes | 2026-10-19 | – | Install test via marketplace not run (CLI not logged in) |
 | Price Peek port | Implemented | `examples/price-peek`, ≤ 0.83 levels mean error vs committed original | 2026-10-19 | – | – |

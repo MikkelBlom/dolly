@@ -9,6 +9,8 @@ A video is a TypeScript project (`video.ts` + `scenes/*.ts`) whose every frame i
 
 You work through the `dolly` CLI (on PATH via this plugin, or `npm link` from the repo). Every command takes `--json`; image commands print PNG paths — **read them** to see the frames. With the MCP server enabled, `dolly_sheet` / `dolly_still` return the images inline instead.
 
+**Start a warm daemon first** when you will iterate: `dolly daemon <dir> --detach` keeps the browsers running (it stops itself after 30 idle minutes). Every `sheet`/`still`/`lint`/`info`/`diff`/`render` on that project then uses it automatically with identical output: a sheet takes ~0.5 s instead of ~3–4 s. It rebuilds on every command, so edits always show. `dolly daemon <dir> --stop` when done.
+
 ## The loop (follow it, in order)
 
 1. **Facts and brand.** Read the product: README, UI code, store images, existing art. Use its real UI, copy, numbers, fonts and colours. Numbers on screen must be computed the way the product computes them (copy the logic in).
